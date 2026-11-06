@@ -17,7 +17,10 @@ Endless procedurally generated worlds, survival and creative modes, crafting, sm
 - **Atmosphere** — rain and thunderstorms, fireflies, campfire smoke, synthesized sound effects and generative music.
 - **Six graphics levels** — Potato, Bad, Medium, Normal, Good and Heavenly (bloom, sun & moon rays, cinematic colour).
 - **Accounts & skins** — create an account or play as an anonymous guest; customise your character.
-- **Multiplayer parties** — host one of your worlds and share a 6-character code.
+- **Multiplayer parties** — host one of your worlds and share a 6-character code or an invite link. If the host leaves, the next player takes over and the party keeps going.
+- **Direct connections** — players connect straight to each other (WebRTC) for low lag, with the public relay as an automatic backup. Movement is buffered and replayed smoothly.
+- **Proximity voice chat** — open mic or push-to-talk; voices get quieter with distance.
+- **Social** — chat history, speech bubbles above players, private messages and commands (`/msg`, `/tp`, `/me`, `/list`), and a Tab player list showing everyone's connection and ping. You hear and see other players build, break, walk and fight.
 - **Servers** — the official **PVP** server, plus servers anyone can create (PVP, Survival or Creative) that stay open to join.
 
 | Servers | PVP |
@@ -37,7 +40,9 @@ Endless procedurally generated worlds, survival and creative modes, crafting, sm
 | E | Inventory & crafting |
 | 1–9, mouse wheel | Choose hotbar slot |
 | Q | Drop item |
-| T | Chat (multiplayer) |
+| T | Chat (multiplayer); `/` opens commands |
+| Tab (hold) | Player list with connection and ping |
+| V (hold) | Push to talk (when voice chat is on) |
 | F5 | Change camera view |
 | Esc | Pause |
 
@@ -66,7 +71,8 @@ python3 build.py   # writes index.html with every script and the atlas inlined
 | `audio.js` | Synthesized sound effects, ambience and music |
 | `storage.js` | Accounts, profiles and world saves |
 | `skins.js` | Player skins and character model |
-| `relay.js` | Multiplayer without claude.ai: tiny MQTT-over-WebSocket client, rooms and shared storage on public relays |
+| `relay.js` | Multiplayer without claude.ai: tiny MQTT-over-WebSocket client, rooms and shared storage on public relays, plus direct WebRTC links |
+| `voice.js` | Proximity voice chat |
 | `net.js` | Multiplayer parties and server sessions |
 | `servers.js` | Server list, creation and shared world saving |
 | `atmos.js` | Weather and ambient effects |

@@ -88,7 +88,7 @@ Object.assign(UI, {
       this.toast(ok ? 'Profile saved' : 'Saved here, but the online copy could not be updated.');
     }
     this.profileMode = 'edit'; this.refreshChip();
-    if (Game.state === 'play') this.show('pause'); else this.show('title');
+    if (Game.state === 'play') this.show('pause'); else { this.show('title'); this.runInvite(); }
   },
   profileAlt() {
     const p = Profile.data;
@@ -246,6 +246,7 @@ Object.assign(UI, {
     $('partyCodeBig').textContent = srv ? srv.name : on ? Net.pretty(Net.code) : '';
     $('partyCodeBig').style.letterSpacing = srv ? '1px' : '';
     $('copyCodeBtn').style.display = srv ? 'none' : '';
+    $('copyLinkBtn').style.display = Cloud.mode === 'relay' ? '' : 'none';
     const pb = $('partyBtn');
     pb.style.display = (Net.available && Game.state === 'play' && !srv) ? '' : 'none';
     if (srv) {
@@ -253,13 +254,13 @@ Object.assign(UI, {
       $('quitBtn').textContent = 'Leave Server';
       return;
     }
-    pb.textContent = on ? (Net.isHost ? 'Close Party' : 'Leave Party (keep playing)') : 'Open to Party';
+    pb.textContent = on ? 'Leave Party (keep playing)' : 'Open to Party';
     $('modeBtn').style.display = on && !Net.isHost ? 'none' : '';
     $('quitBtn').textContent = on && !Net.isHost ? 'Leave Party & Quit' : (Game.worldId ? 'Save & Quit to Title' : 'Quit to Title');
   },
   leavePartyConfirm() {
     if (Net.isHost) {
-      this.confirm('Close the party?', 'Everyone else will be disconnected. Your world stays saved.', async () => { await Net.leave(); this.show('pause'); }, 'pause');
+      this.confirm('Leave the party?', 'Your world stays saved. Everyone else keeps playing — the next player becomes the host.', async () => { await Net.leave(); this.show('pause'); }, 'pause');
     } else {
       this.confirm('Leave the party?', 'You can keep exploring a copy of this world on your own, and save it.', async () => {
         await Net.leave(); Game.worldId = newId(); Game.worldName = Game.worldName.replace(/ \(party\)$/, '') + ' (copy)'; this.show('pause');
@@ -274,6 +275,7 @@ Object.assign(UI, {
   partyChanged() {
     const on = Net.active && this.hudOn;
     $('partyBox').classList.toggle('hidden', !on);
+    this.micTag();
     if (on) {
       $('partyLabel').textContent = Net.server ? 'Server' : 'Party';
       $('partyCode').textContent = Net.server ? Net.server.name : Net.pretty(Net.code);
@@ -287,24 +289,96 @@ Object.assign(UI, {
     if (this.cur === 'pause') this.refreshPause();
   },
 
+  /* ---------- player list (hold Tab) ---------- */
+  showPlayers(on) {
+    on = on && Net.active && Game.state === 'play';
+    $('plist').classList.toggle('hidden', !on);
+    clearInterval(this.plT);
+    if (on) { this.drawPlayers(); this.plT = setInterval(() => this.drawPlayers(), 400); }
+  },
+  drawPlayers() {
+    const list = Net.players();
+    $('plTitle').textContent = Net.server ? Net.server.name : 'Party ' + Net.pretty(Net.code);
+    const direct = list.filter(p => p.conn && p.conn.direct).length;
+    $('plSub').textContent = `${list.length} player${list.length === 1 ? '' : 's'}` + (Cloud.mode === 'relay' && list.length > 1 ? ` · ${direct}/${list.length - 1} direct` : '');
+    const box = $('plRows'); box.innerHTML = '';
+    for (const p of list) {
+      const row = document.createElement('div'); row.className = 'prow' + (p.you ? ' you' : '');
+      const cv = document.createElement('canvas'); cv.width = cv.height = 24;
+      try { const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(Skins.face(p.skin, 24), 0, 0); } catch (e) { }
+      const n = document.createElement('div'); n.className = 'pn'; n.textContent = (p.host ? '★ ' : '') + p.name + (p.you ? ' (you)' : '');
+      const k = document.createElement('div'); k.className = 'pk'; k.textContent = Net.pvp ? `⚔${p.k} ☠${p.d}` : `❤ ${Math.ceil((p.hp || 0) / 2)}`;
+      const v = document.createElement('div'); v.className = 'pv'; v.textContent = p.speaking ? '🔊' : p.voice ? '🎤' : '';
+      const c = document.createElement('div'); c.className = 'pc';
+      if (p.you) c.textContent = Cloud.mode === 'relay' ? (Relay.connected ? 'online' : 'reconnecting…') : 'online';
+      else if (!p.conn) c.textContent = '—';
+      else {
+        const ms = p.conn.rtt ? `${p.conn.rtt} ms` : '…';
+        c.textContent = p.conn.direct ? `direct · ${ms}` : p.conn.connecting ? `relay · ${ms} ↻` : `relay · ${ms}`;
+        if (!p.conn.direct) c.classList.add('relay');
+        if (p.conn.rtt > 250) c.classList.add('slow');
+      }
+      row.append(cv, n, k, v, c); box.appendChild(row);
+    }
+  },
+  micTag() {
+    const el = $('micTag'); if (!el) return;
+    const on = Net.active && Settings.voice > 0 && Voice.track && this.hudOn;
+    el.classList.toggle('hidden', !on);
+    if (!on) return;
+    el.classList.toggle('live', Voice.transmitting);
+    el.textContent = Voice.talking ? '🎤 Talking…' : Voice.transmitting ? '🎤 Mic on' : '🎤 Hold V to talk';
+  },
+  inviteURL() {
+    if (Cloud.mode !== 'relay') return null;
+    const base = location.origin + location.pathname;
+    if (Game.server) return base + '#server=' + encodeURIComponent(Game.server.id);
+    if (Net.active && Net.code) return base + '#party=' + Net.code;
+    return null;
+  },
+  copyLink() {
+    const url = this.inviteURL(); if (!url) return;
+    try { navigator.clipboard.writeText(url).then(() => this.toast('Invite link copied — send it to a friend'), () => this.toast(url)); }
+    catch (e) { this.toast(url); }
+  },
+  /** opened from an invite link: join right away (after picking a profile if needed) */
+  async runInvite() {
+    const inv = this.pendingInvite; if (!inv || !Profile.exists || Game.state !== 'menu') return;
+    this.pendingInvite = null;
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { }
+    if (inv.party) {
+      this.show('multi'); $('joinCode').value = Net.pretty(inv.party);
+      $('mpStatus').textContent = 'Joining your friend’s party…';
+      this.joinFromInput();
+    } else if (inv.server) {
+      this.show('servers');
+      const list = await Servers.fetch();
+      const s = list.find(x => x.id === inv.server);
+      if (s) this.joinServerUI(s); else $('srvStatus').textContent = 'That server no longer exists.';
+    }
+  },
+
   /* ---------- chat ---------- */
-  chatLine(name, text, mine) {
+  chatLine(name, text, mine, kind) {
     const log = $('chatLog');
-    const d = document.createElement('div'); d.className = 'cl' + (name ? '' : ' sys');
+    const d = document.createElement('div'); d.className = 'cl' + (name ? '' : ' sys') + (kind ? ' ' + kind : '');
     if (name) { const b = document.createElement('b'); b.textContent = name + ': '; d.appendChild(b); }
     d.appendChild(document.createTextNode(text));
     log.appendChild(d);
-    while (log.children.length > 8) log.firstChild.remove();
-    setTimeout(() => d.classList.add('fade'), 9000); setTimeout(() => d.remove(), 10200);
+    while (log.children.length > 60) log.firstChild.remove();
+    if ($('chat').classList.contains('open')) log.scrollTop = log.scrollHeight;
+    setTimeout(() => d.classList.add('fade'), 9000); setTimeout(() => d.classList.add('gone'), 10200);
   },
-  openChat() {
+  openChat(prefill) {
     if (!Net.active || Game.ui) return;
     Game.ui = 'chat'; Input.keys = {}; Input.mouseL = Input.mouseR = false;
-    const inp = $('chatInput'); inp.classList.remove('hidden'); inp.value = ''; setTimeout(() => inp.focus(), 0);
+    $('chat').classList.add('open'); const log = $('chatLog'); log.scrollTop = log.scrollHeight;
+    const inp = $('chatInput'); inp.classList.remove('hidden'); inp.value = prefill || ''; setTimeout(() => inp.focus(), 0);
   },
   closeChat(send) {
     const inp = $('chatInput');
     if (send && inp.value.trim()) Net.chat(inp.value);
+    $('chat').classList.remove('open');
     inp.classList.add('hidden'); inp.blur();
     Game.ui = null;
     if (!Input.locked && !Input.noLock) lockPointer(true);

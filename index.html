@@ -313,7 +313,26 @@ input[type=range]::-moz-range-thumb{width:14px;height:24px;background:#8a8580;bo
 #partyInfo .code{font-size:30px;letter-spacing:6px;color:#ffd18a;font-weight:700}
 /* ---------- multiplayer HUD ---------- */
 #tags{position:fixed;inset:0;pointer-events:none;z-index:4;overflow:hidden}
-.tag{position:absolute;left:0;top:0;padding:2px 8px;background:rgba(0,0,0,.5);color:#fff;font-size:15px;white-space:nowrap;text-shadow:1px 1px 0 #000}
+.tag{position:absolute;left:0;top:0;display:flex;flex-direction:column;align-items:center;gap:4px;color:#fff;font-size:15px;white-space:nowrap;text-shadow:1px 1px 0 #000}
+#tags .tag .nm{padding:2px 8px;background:rgba(0,0,0,.5)}
+#tags .tag .nm.talk{box-shadow:0 0 0 2px #7fe07a}
+#tags .tag .bubble{max-width:240px;white-space:normal;text-align:center;padding:4px 10px;background:rgba(255,248,235,.95);color:#2a1f17;text-shadow:none;font-size:15px;border:2px solid rgba(0,0,0,.55);position:relative;animation:bubIn .18s ease-out}
+#tags .tag .bubble:after{content:'';position:absolute;left:50%;bottom:-8px;margin-left:-6px;border:6px solid transparent;border-top-color:rgba(255,248,235,.95)}
+@keyframes bubIn{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
+#chat.open #chatLog{max-height:min(46vh,380px);overflow-y:auto;pointer-events:auto}
+#chat.open .cl,#chat.open .cl.fade{opacity:1;display:block}
+.cl.gone{display:none}
+.cl.whisper{color:#e2b8ff}.cl.whisper b{color:#d39cff}.cl.emote{color:#cfe8ff;font-style:italic}
+#plist{position:absolute;left:50%;top:60px;transform:translateX(-50%);min-width:min(520px,92vw);background:rgba(14,10,8,.82);border:3px solid rgba(0,0,0,.65);padding:10px 14px;z-index:6}
+#plist .plh{display:flex;justify-content:space-between;align-items:baseline;gap:16px;border-bottom:2px solid rgba(255,180,90,.25);padding-bottom:6px;margin-bottom:6px}
+#plist .plh b{font-size:18px;color:#ffd18a}#plist .plh span{font-size:13px;color:#b9a48c}
+.prow{display:grid;grid-template-columns:26px 1fr auto auto auto;gap:10px;align-items:center;padding:3px 0;font-size:16px}
+.prow canvas{width:24px;height:24px;image-rendering:pixelated}
+.prow .pn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.prow.you .pn{color:#ffd18a}
+.prow .pk{font-size:14px;color:#ffb36b}.prow .pc{font-size:13px;color:#9cd98a;text-align:right;min-width:92px}.prow .pc.relay{color:#e8c06a}.prow .pc.slow{color:#ff8a6a}
+.prow .pv{width:18px;text-align:center}
+#micTag{position:absolute;left:12px;bottom:84px;padding:3px 10px;background:rgba(0,0,0,.55);border:2px solid rgba(255,255,255,.18);font-size:14px;color:#ddd}
+#micTag.live{border-color:#7fe07a;color:#c9ffc4}
 #partyBox{position:absolute;right:12px;top:12px;padding:8px 12px;background:rgba(14,10,8,.62);border:3px solid rgba(0,0,0,.6);min-width:150px}
 #partyBox .pt{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#e59a52}
 #partyBox .pt b{color:#ffd18a;letter-spacing:3px}
@@ -348,6 +367,8 @@ input[type=range]::-moz-range-thumb{width:14px;height:24px;background:#8a8580;bo
   <div id="pickups"></div>
   <div id="partyBox" class="hidden"><div class="pt"><span id="partyLabel">Party</span> <b id="partyCode"></b></div><div id="partyList"></div></div>
   <div id="zoneTag" class="hidden">Safe zone</div>
+  <div id="plist" class="hidden"><div class="plh"><b id="plTitle"></b><span id="plSub"></span></div><div id="plRows"></div></div>
+  <div id="micTag" class="hidden"></div>
   <div id="chat"><div id="chatLog"></div><input id="chatInput" class="hidden" maxlength="120" placeholder="Say something… Enter to send, Esc to cancel" autocomplete="off"></div>
   <div id="hudBottom">
     <div id="itemName"></div>
@@ -509,6 +530,9 @@ input[type=range]::-moz-range-thumb{width:14px;height:24px;background:#8a8580;bo
       <kbd>Q</kbd><span>Drop item (Ctrl+Q drops the stack)</span>
       <kbd>Middle click</kbd><span>Pick the block you’re looking at</span>
       <kbd>F5</kbd><span>Switch camera: first person, behind, in front</span>
+      <kbd>T</kbd><span>Chat in multiplayer — <b>/</b> for commands: /msg, /tp, /me, /list</span>
+      <kbd>Tab</kbd><span>Hold to see everyone in your game and their connection</span>
+      <kbd>V</kbd><span>Push to talk (turn on Voice chat in Settings)</span>
       <kbd>Right click</kbd><span>On a furnace: smelt · on a bed: sleep · with armour: equip</span>
       <kbd>T</kbd><span>Chat (in a party)</span>
       <kbd>F1 · F3</kbd><span>Hide HUD · debug info</span>
@@ -538,7 +562,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:24px;background:#8a8580;bo
   <div class="panel"><h2>Game Paused</h2>
     <button class="btn primary" data-act="resume">Back to Game</button>
     <button class="btn" data-act="settings">Settings</button>
-    <div id="partyInfo"><div style="font-size:13px;color:#cdbfae" id="partyInfoLabel">PARTY CODE</div><div class="code" id="partyCodeBig"></div><button class="btn" data-act="copyCode" id="copyCodeBtn" style="height:36px;font-size:15px;margin:6px auto 0;width:200px">Copy code</button></div>
+    <div id="partyInfo"><div style="font-size:13px;color:#cdbfae" id="partyInfoLabel">PARTY CODE</div><div class="code" id="partyCodeBig"></div><div style="display:flex;gap:8px;justify-content:center;margin-top:6px"><button class="btn" data-act="copyCode" id="copyCodeBtn" style="height:36px;font-size:15px;width:150px">Copy code</button><button class="btn" data-act="copyLink" id="copyLinkBtn" style="height:36px;font-size:15px;width:190px">Copy invite link</button></div></div>
     <button class="btn" data-act="party" id="partyBtn">Open to Party</button>
     <button class="btn" data-act="toggleMode" id="modeBtn">Game Mode: Survival</button>
     <button class="btn" data-act="profile">Profile &amp; Skin</button>
@@ -613,6 +637,7 @@ const DAY_LEN = 600; // seconds for a full day/night cycle
 // ---------- small math ----------
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
+const lerpAngle = (a, b, t) => { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return a + d * t; };
 const smoothstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const mix3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 
@@ -925,7 +950,7 @@ const CREATIVE_START = [B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.OAK_PLANKS, B.OAK_
 // ---------- settings ----------
 const DEFAULT_SETTINGS = {
   renderDist: 8, fov: 75, sens: 100, invertY: false, master: 70, music: 45, sfx: 80, bobbing: true,
-  showFps: false, difficulty: 2, quality: 3, clouds: true, guiScale: 2, weather: true, particles: 1, ambient: 70, autoRes: true, graphics: 3, v: 2,
+  showFps: false, difficulty: 2, quality: 3, clouds: true, guiScale: 2, weather: true, particles: 1, ambient: 70, autoRes: true, graphics: 3, v: 2, voice: 0, voiceVol: 80,
 };
 const DIFFICULTY = ['Peaceful', 'Easy', 'Normal', 'Hard'];
 const QUALITY = ['50%', '70%', '85%', '100%', 'Sharp (HiDPI)', 'Ultra (supersampled)'];
@@ -2831,7 +2856,7 @@ const GameAudio = {
     const f = c.createBiquadFilter(); f.type = o.type || 'bandpass'; f.frequency.value = o.freq || 1000; f.Q.value = o.q || 1;
     const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(o.gain || 0.3, t + (o.attack || 0.004));
     g.gain.exponentialRampToValueAtTime(0.0001, t + (o.attack || 0.004) + (o.decay || 0.1));
-    src.connect(f); f.connect(g); g.connect(o.bus || this.sfx);
+    src.connect(f); f.connect(g); g.connect(o.bus || this.curBus || this.sfx);
     src.start(t, Math.random() * 1.2, (o.decay || 0.1) + 0.05);
   },
   tone(o) {
@@ -2841,8 +2866,26 @@ const GameAudio = {
     if (o.to) osc.frequency.exponentialRampToValueAtTime(o.to, t + (o.decay || 0.2));
     const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(o.gain || 0.2, t + (o.attack || 0.005));
     g.gain.exponentialRampToValueAtTime(0.0001, t + (o.attack || 0.005) + (o.decay || 0.2));
-    osc.connect(g); g.connect(o.bus || this.sfx);
+    osc.connect(g); g.connect(o.bus || this.curBus || this.sfx);
     osc.start(t); osc.stop(t + (o.attack || 0.005) + (o.decay || 0.2) + 0.05);
+  },
+  /** play a sound as if it came from a point in the world: quieter with distance, panned left/right */
+  at(x, y, z, fn, range) {
+    if (!this.ready || !Game.player || Game.state !== 'play') return;
+    range = range || 24;
+    const e = Game.eyePos(), dx = x - e[0], dy = y - e[1], dz = z - e[2], d = Math.hypot(dx, dy, dz);
+    if (d > range) return;
+    const c = this.ctx, g = c.createGain(); g.gain.value = Math.pow(1 - d / range, 1.5);
+    let out = g;
+    if (c.createStereoPanner) {
+      const yaw = Game.player.yaw, rx = Math.cos(yaw), rz = Math.sin(yaw);
+      const p = c.createStereoPanner(); p.pan.value = d > 0.5 ? clamp((dx * rx + dz * rz) / d, -1, 1) * 0.85 : 0;
+      g.connect(p); out = p;
+    }
+    out.connect(this.sfx);
+    this.curBus = g;
+    try { fn(); } finally { this.curBus = null; }
+    setTimeout(() => { try { g.disconnect(); out.disconnect(); } catch (err) { } }, 2500);
   },
   mat(id) { return (BLOCKS[id] && BLOCKS[id].sound) || 'stone'; },
   dig(id, vol) {
@@ -3286,7 +3329,7 @@ function topicMatch(filter, topic) {
 }
 
 const Relay = {
-  conns: [], peer: null, subs: new Map(), seen: new Set(), seenQ: [], connectP: null, live: 0, downSince: 0, errHandlers: new Set(),
+  conns: [], peer: null, subs: new Map(), seen: new Set(), seenQ: [], connectP: null, live: 0, downSince: 0, errHandlers: new Set(), rooms: new Set(),
   get brokers() { return (typeof window !== 'undefined' && Array.isArray(window.__relayBrokers)) ? window.__relayBrokers : RELAY_BROKERS; },
   get connected() { return this.conns.some(c => c.ready); },
   ensure() {
@@ -3311,7 +3354,11 @@ const Relay = {
   connState(c, up) {
     if (up) {
       this.downSince = 0;
-      for (const f of this.subs.keys()) c.subscribe(f);
+      const back = c.everUp; c.everUp = true;
+      Promise.all([...this.subs.keys()].map(f => c.subscribe(f))).then(() => {
+        // after a dropped connection, say hello again so everyone re-sends their full state
+        if (back) for (const r of this.rooms) if (!r.left) r.send({ t: 'h', d: r.mine });
+      });
     } else {
       this.retry(c);
       if (!this.connected && !this.downSince) {
@@ -3355,6 +3402,72 @@ const Relay = {
   },
 };
 
+/* ---------- direct peer-to-peer links (WebRTC), signalled through the relay ---------- */
+const RTC_ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }, { urls: 'stun:stun.cloudflare.com:3478' }];
+class PeerLink {
+  constructor(room, peer, initiator) {
+    this.room = room; this.peer = peer; this.initiator = initiator; this.open = false; this.failed = false; this.rtt = 0; this.pendingC = []; this.audio = null;
+    const pc = this.pc = new RTCPeerConnection({ iceServers: RTC_ICE });
+    pc.onicecandidate = e => { if (e.candidate) room.signal(peer, { c: e.candidate.toJSON() }); };
+    pc.ontrack = e => { if (typeof Voice !== 'undefined') Voice.remoteTrack(peer, e.streams && e.streams[0] ? e.streams[0] : new MediaStream([e.track])); };
+    pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed' || pc.connectionState === 'closed') this.fail(); };
+    if (initiator) {
+      this.bind(pc.createDataChannel('g', { ordered: true }));
+      this.audio = pc.addTransceiver('audio', { direction: 'sendrecv' });
+      this.offer();
+    } else pc.ondatachannel = e => this.bind(e.channel);
+    this.timer = setTimeout(() => { if (!this.open) this.fail(); }, 16000);
+  }
+  async offer() {
+    try { await this.pc.setLocalDescription(await this.pc.createOffer()); this.room.signal(this.peer, { sdp: this.pc.localDescription.toJSON() }); }
+    catch (e) { this.fail(); }
+  }
+  async onSignal(d) {
+    if (this.failed) return;
+    const pc = this.pc;
+    try {
+      if (d.sdp && d.sdp.type) {
+        await pc.setRemoteDescription(d.sdp);
+        if (d.sdp.type === 'offer') {
+          const tr = pc.getTransceivers().find(t => t.receiver && t.receiver.track && t.receiver.track.kind === 'audio');
+          if (tr) { tr.direction = 'sendrecv'; this.audio = tr; }
+          await pc.setLocalDescription(await pc.createAnswer());
+          this.room.signal(this.peer, { sdp: pc.localDescription.toJSON() });
+        }
+        for (const c of this.pendingC.splice(0)) await pc.addIceCandidate(c).catch(() => { });
+      } else if (d.c) {
+        if (pc.remoteDescription) await pc.addIceCandidate(d.c).catch(() => { });
+        else this.pendingC.push(d.c);
+      }
+    } catch (e) { this.fail(); }
+  }
+  bind(dc) {
+    this.dc = dc;
+    dc.onopen = () => {
+      this.open = true; clearTimeout(this.timer);
+      this.pingT = setInterval(() => this.raw(JSON.stringify({ t: 'pi', ts: performance.now() })), 2000);
+      this.raw(JSON.stringify({ t: 'pi', ts: performance.now() }));
+      this.room.linkChanged(this);
+      if (typeof Voice !== 'undefined') Voice.attach(this);
+    };
+    dc.onmessage = e => {
+      const txt = typeof e.data === 'string' ? e.data : '';
+      if (txt.startsWith('{"t":"pi"')) { try { this.raw(JSON.stringify({ t: 'po', ts: JSON.parse(txt).ts })); } catch (x) { } return; }
+      if (txt.startsWith('{"t":"po"')) { try { const r = performance.now() - JSON.parse(txt).ts; this.rtt = this.rtt ? this.rtt * 0.7 + r * 0.3 : r; } catch (x) { } return; }
+      this.room.onMsg(null, txt);
+    };
+    dc.onclose = () => { if (this.open) { this.open = false; this.room.linkChanged(this); } };
+  }
+  raw(s) { if (this.open && this.dc && this.dc.readyState === 'open') { try { this.dc.send(s); return true; } catch (e) { } } return false; }
+  fail() {
+    if (this.failed) return;
+    this.failed = true; this.open = false; clearTimeout(this.timer); clearInterval(this.pingT);
+    try { this.pc.close(); } catch (e) { }
+    this.room.linkChanged(this);
+  }
+  close() { this.failed = true; this.open = false; clearTimeout(this.timer); clearInterval(this.pingT); try { this.dc && this.dc.close(); } catch (e) { } try { this.pc.close(); } catch (e) { } }
+}
+
 /* ---------- presence rooms (same shape as the claude.ai room API) ---------- */
 class RelayRoom {
   constructor(name) {
@@ -3362,20 +3475,48 @@ class RelayRoom {
     this.id = Relay.peer + '~' + Math.random().toString(36).slice(2, 8); // one id per visit, so rejoining starts clean
     this.mine = {}; this.others = new Map(); this.handlers = []; this.errs = []; this.seq = 0; this.left = false;
     this.onMsg = this.onMsg.bind(this); this.onWill = this.onWill.bind(this); this.onDown = e => this.errs.forEach(f => f(e));
+    this.links = new Map(); this.p2p = typeof RTCPeerConnection !== 'undefined';
+  }
+  /** connection details for the player list: direct link or relay, and round-trip time */
+  info(peer) {
+    const l = this.links.get(peer), p = this.others.get(peer);
+    if (l && l.open) return { direct: true, rtt: Math.round(l.rtt) };
+    return { direct: false, rtt: p && p.rtt ? Math.round(p.rtt) : 0, connecting: !!(l && !l.failed) };
+  }
+  get allDirect() { if (!this.others.size) return false; for (const p of this.others.keys()) { const l = this.links.get(p); if (!l || !l.open) return false; } return true; }
+  signal(to, d) { this.send({ t: 'sig', to, d }); }
+  ensureLink(peer) {
+    if (!this.p2p || this.left) return;
+    const l = this.links.get(peer);
+    if (l && !l.failed) return;
+    if (l && l.failed && Date.now() - (l.failedAt || (l.failedAt = Date.now())) < 45000) return; // wait before trying again
+    if (this.id < peer) this.links.set(peer, new PeerLink(this, peer, true));
+  }
+  linkChanged(l) {
+    if (l.failed) l.failedAt = Date.now();
+    if (typeof Net !== 'undefined' && Net.room === this) UI.partyChanged();
   }
   async start() {
     await Relay.subscribe(this.topic, this.onMsg);
     await Relay.subscribe(RELAY_PREFIX + 'will', this.onWill);
     Relay.errHandlers.add(this.onDown);
+    Relay.rooms.add(this);
     this.send({ t: 'h', d: this.mine });
-    this.kaT = setInterval(() => { this.send({ t: 'k' }); this.prune(); }, 4000);
+    this.kaT = setInterval(() => {
+      this.send({ t: 'k' }); this.prune();
+      // round-trip times for players we can only reach through the relay
+      for (const p of this.others.values()) { const l = this.links.get(p.peer); if (!l || !l.open) this.send({ t: 'pi', to: p.peer, ts: performance.now() }); this.ensureLink(p.peer); }
+    }, 4000);
     return this;
   }
   send(o) {
     o.f = this.id; o.s = ++this.seq;
     const s = JSON.stringify(o);
     if (s.length > RELAY_MAX) throw Object.assign(new Error('presence too large'), { code: 'invalid_argument' });
-    Relay.publish(this.topic, s, false);
+    // state updates go straight to players we have a direct link with; the relay carries the rest
+    let viaRelay = o.t !== 'p' || !this.others.size;
+    if (!viaRelay) for (const p of this.others.keys()) { const l = this.links.get(p); if (!l || !l.raw(s)) viaRelay = true; }
+    if (viaRelay) Relay.publish(this.topic, s, false);
   }
   me() { return { peer: this.id, isMe: true, sameTab: true, kind: 'viewer', guest: true, presence: Object.freeze(Object.assign({}, this.mine)), updatedAt: Date.now() }; }
   view(p) { return { peer: p.peer, isMe: false, sameTab: false, kind: 'viewer', guest: true, presence: Object.freeze(Object.assign({}, p.state)), updatedAt: p.seen }; }
@@ -3406,11 +3547,31 @@ class RelayRoom {
   }
   onMsg(topic, payload) {
     if (this.left) return;
-    let o; try { o = JSON.parse(new TextDecoder().decode(payload)); } catch (e) { return; }
+    let o; try { o = JSON.parse(typeof payload === 'string' ? payload : new TextDecoder().decode(payload)); } catch (e) { return; }
     if (!o || typeof o.f !== 'string' || o.f === this.id || typeof o.s !== 'number') return;
     if (!Relay.fresh(this.topic + o.f + ':' + o.s)) return;
+    if (o.t === 'sig') {
+      if (o.to !== this.id || !this.p2p || !o.d) return;
+      let l = this.links.get(o.f);
+      if (o.d.sdp && o.d.sdp.type === 'offer' && (!l || l.failed)) {
+        if (l) l.close();
+        l = new PeerLink(this, o.f, false); this.links.set(o.f, l);
+        const early = this.earlyC && this.earlyC.get(o.f); if (early) { l.pendingC.push(...early); this.earlyC.delete(o.f); }
+      }
+      if (l) l.onSignal(o.d);
+      else if (o.d.c) { // a candidate that overtook its offer on the other broker
+        if (!this.earlyC) this.earlyC = new Map();
+        const a = this.earlyC.get(o.f) || []; a.push(o.d.c); this.earlyC.set(o.f, a.slice(-30));
+      }
+      return;
+    }
+    if (o.t === 'pi') { if (o.to === this.id) this.send({ t: 'po', to: o.f, ts: o.ts }); return; }
+    if (o.t === 'po') {
+      if (o.to === this.id) { const q = this.others.get(o.f); if (q && typeof o.ts === 'number') { const r = performance.now() - o.ts; q.rtt = q.rtt ? q.rtt * 0.7 + r * 0.3 : r; } }
+      return;
+    }
     let p = this.others.get(o.f), joined = false;
-    if (o.t === 'b') { if (p) { this.others.delete(o.f); this.emit([], [p], []); } return; }
+    if (o.t === 'b') { if (p) { this.others.delete(o.f); this.dropLink(o.f); this.emit([], [p], []); } return; }
     if (!p) { p = { peer: o.f, state: {}, fs: {}, seen: Date.now() }; this.others.set(o.f, p); joined = true; }
     p.seen = Date.now();
     if (o.t === 'h' || o.t === 'f') this.apply(p, o.d, o.s, true);
@@ -3419,25 +3580,32 @@ class RelayRoom {
     if (o.t === 'h' || (joined && o.t !== 'f')) {
       clearTimeout(this.fullT); this.fullT = setTimeout(() => { if (!this.left) this.send({ t: 'f', d: this.mine }); }, 60 + Math.random() * 140);
     }
+    if (joined) this.ensureLink(o.f);
     if (o.t === 'k' && !joined) return;
     this.emit(joined ? [p] : [], [], joined ? [] : [p]);
+  }
+  dropLink(peer) {
+    const l = this.links.get(peer); if (l) { l.close(); this.links.delete(peer); }
+    if (typeof Voice !== 'undefined') Voice.removePeer(peer);
   }
   onWill(topic, payload) {
     let o; try { o = JSON.parse(new TextDecoder().decode(payload)); } catch (e) { return; }
     if (!o || typeof o.f !== 'string') return;
     const gone = [...this.others.values()].filter(p => p.peer.split('~')[0] === o.f);
-    gone.forEach(p => this.others.delete(p.peer));
+    gone.forEach(p => { this.others.delete(p.peer); this.dropLink(p.peer); });
     if (gone.length) this.emit([], gone, []);
   }
   prune() {
     const now = Date.now(), gone = [];
     for (const p of this.others.values()) if (now - p.seen > 15000) gone.push(p);
-    gone.forEach(p => this.others.delete(p.peer));
+    gone.forEach(p => { this.others.delete(p.peer); this.dropLink(p.peer); });
     if (gone.length) this.emit([], gone, []);
   }
   async leave() {
     if (this.left) return; this.left = true;
     clearInterval(this.kaT); clearTimeout(this.fullT);
+    Relay.rooms.delete(this);
+    for (const peer of [...this.links.keys()]) this.dropLink(peer);
     try { this.seq++; Relay.publish(this.topic, JSON.stringify({ t: 'b', f: this.id, s: this.seq }), false); } catch (e) { }
     Relay.unsubscribe(this.topic, this.onMsg); Relay.unsubscribe(RELAY_PREFIX + 'will', this.onWill);
     Relay.errHandlers.delete(this.onDown);
@@ -3535,6 +3703,97 @@ const Shared = {
       for (let i = 0; i < n; i++) await col.doc('p' + i).delete();
       await col.doc('meta').delete();
     } catch (e) { }
+  },
+};
+
+/* =====================================================================
+   Proximity voice chat over the direct peer-to-peer links.
+   Voices get quieter with distance and fade out past VOICE_RANGE blocks.
+   Remote voices play through <audio> elements so the browser's echo
+   cancellation keeps working; WebAudio is only used to see who's talking.
+   ===================================================================== */
+const VOICE_RANGE = 40;
+const Voice = {
+  stream: null, track: null, starting: null, remotes: new Map(), level: 0, ptt: false, analyser: null, buf: null,
+  get mode() { return Settings.voice | 0; },            // 0 off, 1 open mic, 2 push-to-talk (V)
+  get supported() { return Cloud.mode === 'relay' && typeof RTCPeerConnection !== 'undefined' && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); },
+  get transmitting() { return !!this.track && (this.mode === 1 || (this.mode === 2 && this.ptt)); },
+  async apply() {
+    if (this.mode && this.supported) {
+      if (!this.track && !this.starting) {
+        this.starting = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
+          .then(s => {
+            this.stream = s; this.track = s.getAudioTracks()[0];
+            this.track.enabled = this.transmitting;
+            try {
+              GameAudio.init();
+              const c = GameAudio.ctx, src = c.createMediaStreamSource(s);
+              this.analyser = c.createAnalyser(); this.analyser.fftSize = 512; this.buf = new Float32Array(512);
+              src.connect(this.analyser);
+            } catch (e) { }
+            if (typeof Net !== 'undefined' && Net.room && Net.room.links) for (const l of Net.room.links.values()) this.attach(l);
+            UI.toast(this.mode === 2 ? 'Voice chat on — hold V to talk' : 'Voice chat on — your microphone is live');
+          })
+          .catch(() => { Settings.voice = 0; saveSettings(); UI.toast('Microphone blocked — voice chat is off.'); if (UI.refreshSettings) UI.refreshSettings(); })
+          .finally(() => { this.starting = null; });
+      }
+      if (this.track) this.track.enabled = this.transmitting;
+    } else this.stop();
+    UI.micTag && UI.micTag();
+  },
+  stop() {
+    if (this.stream) this.stream.getTracks().forEach(t => t.stop());
+    this.stream = this.track = this.analyser = null;
+    if (typeof Net !== 'undefined' && Net.room && Net.room.links) for (const l of Net.room.links.values()) if (l.audio) l.audio.sender.replaceTrack(null).catch(() => { });
+  },
+  attach(link) { if (link.audio && this.track) link.audio.sender.replaceTrack(this.track).catch(() => { }); },
+  setPTT(down) { if (this.ptt === down) return; this.ptt = down; if (this.track) this.track.enabled = this.transmitting; UI.micTag && UI.micTag(); },
+  remoteTrack(peer, stream) {
+    let v = this.remotes.get(peer);
+    if (v && v.stream === stream) return;
+    if (v) this.removePeer(peer);
+    const el = new Audio(); el.autoplay = true; el.srcObject = stream; el.volume = 0;
+    el.play && el.play().catch(() => { });
+    v = { stream, el, analyser: null, level: 0 };
+    try {
+      GameAudio.init();
+      const c = GameAudio.ctx, src = c.createMediaStreamSource(stream);
+      v.analyser = c.createAnalyser(); v.analyser.fftSize = 512; src.connect(v.analyser); v.src = src;
+    } catch (e) { }
+    this.remotes.set(peer, v);
+  },
+  removePeer(peer) {
+    const v = this.remotes.get(peer); if (!v) return;
+    try { v.el.pause(); v.el.srcObject = null; } catch (e) { }
+    try { v.src && v.src.disconnect(); } catch (e) { }
+    this.remotes.delete(peer);
+  },
+  clear() { for (const p of [...this.remotes.keys()]) this.removePeer(p); },
+  rms(an) {
+    if (!an) return 0;
+    if (!this.buf) this.buf = new Float32Array(512);
+    an.getFloatTimeDomainData(this.buf); let s = 0;
+    for (let i = 0; i < this.buf.length; i++) s += this.buf[i] * this.buf[i];
+    return Math.sqrt(s / this.buf.length);
+  },
+  update(dt) {
+    const P = Game.player;
+    const master = (Settings.master / 100) * ((Settings.voiceVol === undefined ? 80 : Settings.voiceVol) / 100);
+    for (const [peer, v] of this.remotes) {
+      const r = Net.remotes.get(peer);
+      let vol = 0;
+      if (r && P && !(r.flags & 4)) {
+        const d = Math.hypot(r.pos[0] - P.pos[0], r.pos[1] - P.pos[1], r.pos[2] - P.pos[2]);
+        vol = Math.pow(Math.max(0, 1 - d / VOICE_RANGE), 1.3);
+      }
+      v.el.volume = clamp(vol * master, 0, 1);
+      v.level = v.level * 0.7 + this.rms(v.analyser) * 0.3;
+      if (r) r.speaking = v.level > 0.008 && vol > 0;
+    }
+    const lv = this.transmitting ? this.rms(this.analyser) : 0;
+    this.level = this.level * 0.7 + lv * 0.3;
+    const talking = this.transmitting && this.level > 0.008;
+    if (talking !== this.talking) { this.talking = talking; UI.micTag && UI.micTag(); }
   },
 };
 
@@ -3794,11 +4053,13 @@ const Net = {
   },
   setup(room, code, isHost) {
     this.room = room; this.code = code; this.isHost = isHost; this.active = true; this.hostLeft = false;
+    if (!this.server) this.myJ = isHost ? Date.now() - 1e9 : Date.now(); // the host who opened the party stays first in line
     this.remotes.clear(); this.ring = []; this.atkRing = []; this.hitRing = []; this.sent = {}; this.seq = 0;
     const meP = room.peers().find(p => p.sameTab); this.me = meP ? meP.peer : null;
     this.unsub.push(room.onPeers(ch => this.onPeers(ch), e => this.onError(e)));
     Game.world.onEdit = (x, y, z, id) => this.localEdit(x, y, z, id);
     UI.partyChanged();
+    Voice.apply();
   },
   setupServer(room, srv) {
     this.server = srv; this.pvp = srv.mode === 'pvp'; this.myJ = Date.now(); this.saver = false;
@@ -3809,16 +4070,34 @@ const Net = {
   },
   /** servers: the longest-connected player runs the world; the longest-connected writer saves it */
   elect() {
-    if (!this.server || !this.active) return;
+    if (!this.active) return;
     const me = { peer: this.me || '~', j: this.myJ, cw: Servers.canWrite !== false, me: true };
     const all = [me, ...[...this.remotes.values()].map(r => ({ peer: r.peer, j: r.j, cw: r.cw }))];
     all.sort((a, b) => (a.j - b.j) || (a.peer < b.peer ? -1 : a.peer > b.peer ? 1 : 0));
     const keeper = !!all[0].me;
-    if (keeper !== this.isHost) { this.isHost = keeper; Mobs.clear(); }
+    if (keeper !== this.isHost) {
+      this.isHost = keeper; Mobs.clear();
+      if (!this.server && keeper) this.becomeHost();
+    }
+    if (!this.server) return;
     const w = all.find(x => x.cw);
     const saver = !!Cloud.sdb && !!w && !!w.me;
     if (saver && !this.saver) { this.hbT = Math.min(this.hbT, 1); }
     this.saver = saver;
+  },
+  /** party host left: the longest-connected player takes over, so the party keeps going */
+  async becomeHost() {
+    if (!Game.worldId) { Game.worldId = newId(); Game.created = Date.now(); }
+    this.chatSys('You are now the party host — this world is saved to your worlds.');
+    UI.banner('You are the host now', `Party ${this.pretty(this.code)} keeps going`);
+    if (Cloud.sdb && this.code) {
+      try {
+        await Cloud.sdb.doc('parties/' + this.code).set(this.partyDoc());
+        await Shared.putText('parties/' + this.code + '/edits', Game.world.encodeEdits());
+        this.persist = true; this.docVer = Game.world.editVer;
+      } catch (e) { this.persist = false; }
+    }
+    UI.refreshPause && UI.refreshPause();
   },
   async saveServer() {
     if (!this.server || this.docBusy || !Game.world) return;
@@ -3837,6 +4116,7 @@ const Net = {
       }
     }
     const room = this.room, code = this.code, wasHost = this.isHost, persist = this.persist;
+    this.lastPeers = this.remotes.size;
     this.active = false; this.room = null;
     this.unsub.forEach(u => { try { u(); } catch (e) { } }); this.unsub = [];
     for (const r of this.remotes.values()) r.tag && r.tag.remove();
@@ -3844,7 +4124,8 @@ const Net = {
     if (Game.world) Game.world.onEdit = null;
     if (!wasHost) Mobs.clear();
     if (room) { try { await room.leave(); } catch (e) { } }
-    if (wasHost && persist && Cloud.sdb) { try { await Cloud.sdb.doc('parties/' + code).delete(); await Shared.removeText('parties/' + code + '/edits'); } catch (e) { } }
+    if (wasHost && persist && Cloud.sdb && this.lastPeers === 0) { try { await Cloud.sdb.doc('parties/' + code).delete(); await Shared.removeText('parties/' + code + '/edits'); } catch (e) { } }
+    Voice.stop(); Voice.clear();
     this.code = null; this.isHost = false; this.server = null; this.pvp = false; this.saver = false; this.dk = null; this.pvRing = [];
     UI.partyChanged();
   },
@@ -3883,11 +4164,40 @@ const Net = {
     }
     return best ? { r: best, t: bt } : null;
   },
+  clean(text) { return [...String(text)].filter(ch => { const c = ch.codePointAt(0); return !(c < 32 || (c >= 0x7f && c <= 0x9f) || (c >= 0x200b && c <= 0x200f) || (c >= 0x2028 && c <= 0x202e) || (c >= 0x2060 && c <= 0x206f) || c === 0xfeff); }).join('').trim().slice(0, 120); },
+  findPlayer(q) {
+    q = String(q || '').toLowerCase(); if (!q) return null;
+    const list = [...this.remotes.values()];
+    return list.find(r => r.name.toLowerCase() === q) || list.find(r => r.name.toLowerCase().startsWith(q)) || null;
+  },
   chat(text) {
-    text = [...String(text)].filter(ch => { const c = ch.codePointAt(0); return !(c < 32 || (c >= 0x7f && c <= 0x9f) || (c >= 0x200b && c <= 0x200f) || (c >= 0x2028 && c <= 0x202e) || (c >= 0x2060 && c <= 0x206f) || c === 0xfeff); }).join('').trim().slice(0, 120);
+    text = this.clean(text);
     if (!text) return;
+    if (text[0] === '/') return this.command(text);
     this.chatMsg = [++this.chatSeq, text];
     UI.chatLine(Profile.data.name, text, true);
+  },
+  command(text) {
+    const [cmd, ...rest] = text.slice(1).split(/\s+/), arg = rest.join(' ');
+    const c = cmd.toLowerCase();
+    if (c === 'help' || c === '?') {
+      ['/msg <player> <text> — private message', '/tp <player> — teleport to a player', '/me <action> — describe what you do', '/list — who is here', 'Hold Tab — player list with connection quality']
+        .forEach(l => this.chatSys(l));
+    } else if (c === 'list' || c === 'who') {
+      const ps = this.players(); this.chatSys(`${ps.length} here: ` + ps.map(p => p.name + (p.you ? ' (you)' : '')).join(', '));
+    } else if (c === 'msg' || c === 'w' || c === 'tell' || c === 'whisper') {
+      const r = this.findPlayer(rest[0]), body = this.clean(rest.slice(1).join(' '));
+      if (!r) this.chatSys(`No player called “${rest[0] || ''}” here.`);
+      else if (!body) this.chatSys('Usage: /msg <player> <text>');
+      else { this.chatMsg = [++this.chatSeq, body, r.peer]; UI.chatLine(`You → ${r.name}`, body, true, 'whisper'); }
+    } else if (c === 'me') {
+      if (arg) { this.chatMsg = [++this.chatSeq, '*' + arg]; UI.chatLine(null, `${Profile.data.name} ${arg}`, true, 'emote'); }
+    } else if (c === 'tp' || c === 'goto') {
+      const r = this.findPlayer(arg);
+      if (this.pvp) this.chatSys('Teleporting is off on PVP servers.');
+      else if (!r) this.chatSys(`No player called “${arg}” here.`);
+      else { const P = Game.player; P.pos = [r.pos[0] + 0.8, r.pos[1] + 0.1, r.pos[2] + 0.8]; P.vel = [0, 0, 0]; P.fallDist = 0; this.chatSys(`Teleported to ${r.name}`); GameAudio.poof(); }
+    } else this.chatSys(`Unknown command /${cmd} — try /help`);
   },
   chatSys(text) { UI.chatLine(null, text); },
   buildPresence() {
@@ -3897,10 +4207,10 @@ const Net = {
       p: [r2(P.pos[0]), r2(P.pos[1]), r2(P.pos[2])], r: [r2(P.yaw), r2(P.pitch)],
       st: [(P.sneak ? 1 : 0) | (P.flying ? 2 : 0) | (P.alive ? 0 : 4), this.swingCount, Game.inv.held ? Game.inv.held.id : 0],
       e: [].concat(...this.ring), a: [].concat(...this.atkRing), c: this.chatMsg, ar: Game.inv.armorMats(),
-      hp: P.alive ? Math.max(0, Math.ceil(P.health)) : 0,
+      hp: P.alive ? Math.max(0, Math.ceil(P.health)) : 0, j: this.myJ, vc: Voice.transmitting ? 1 : 0,
     };
     if (this.server) {
-      o.j = this.myJ; o.cw = Servers.canWrite === false ? 0 : 1;
+      o.cw = Servers.canWrite === false ? 0 : 1;
       if (this.pvp) { o.pv = [].concat(...this.pvRing); o.sc = [Game.score.k, Game.score.d]; o.dk = this.dk; }
     }
     if (this.isHost) {
@@ -3914,14 +4224,20 @@ const Net = {
   },
   update(dt) {
     if (!this.active) return;
-    // send presence (~12 Hz), only the fields that changed
-    this.sendT -= dt;
+    // send presence: 20 Hz over direct links, 10-12 Hz through relays — only the fields that changed,
+    // stamped with our clock so others can replay our movement smoothly
+    this.sendT -= dt; this.idleT = (this.idleT || 0) + dt;
     if (this.sendT <= 0) {
-      this.sendT = Cloud.mode === 'relay' ? 0.1 : 0.08;
+      const direct = this.room.allDirect;
+      this.sendT = direct ? 0.05 : Cloud.mode === 'relay' ? 0.1 : 0.08;
       const o = this.buildPresence(), patch = {}; let any = false;
       for (const k in o) { const s = JSON.stringify(o[k]); if (this.sent[k] !== s) { patch[k] = o[k]; this.sent[k] = s; any = true; } }
-      if (any) this.room.presence(patch).catch(e => { if (e && e.code === 'invalid_argument') { this.ring = this.ring.slice(-8); this.sent = {}; } });
+      if (any || this.idleT > 0.5) {
+        patch.tm = Math.round(performance.now()); this.idleT = 0;
+        this.room.presence(patch).catch(e => { if (e && e.code === 'invalid_argument') { this.ring = this.ring.slice(-8); this.sent = {}; } });
+      }
     }
+    Voice.update(dt);
     // host: keep the party doc's edits fresh for late joiners
     if (this.isHost && this.persist) {
       this.docT -= dt;
@@ -3942,19 +4258,61 @@ const Net = {
       }
     }
     // interpolate remote players
+    const now = performance.now();
     for (const r of this.remotes.values()) {
       if (r.hurtT > 0) r.hurtT -= dt;
-      const k = 1 - Math.exp(-12 * dt);
-      const ox = r.pos[0], oz = r.pos[2];
-      for (let i = 0; i < 3; i++) r.pos[i] = lerp(r.pos[i], r.tpos[i], k);
-      let dy = r.tyaw - r.yaw; while (dy > Math.PI) dy -= Math.PI * 2; while (dy < -Math.PI) dy += Math.PI * 2;
-      r.yaw += dy * k; r.pitch = lerp(r.pitch, r.tpitch, k);
-      const sp = Math.hypot(r.pos[0] - ox, r.pos[2] - oz) / Math.max(dt, 1e-4);
+      const ox = r.pos[0], oy = r.pos[1], oz = r.pos[2];
+      if (r.snaps.length) this.replay(r, now);
+      else {
+        const k = 1 - Math.exp(-12 * dt);
+        for (let i = 0; i < 3; i++) r.pos[i] = lerp(r.pos[i], r.tpos[i], k);
+        r.yaw = lerpAngle(r.yaw, r.tyaw, k); r.pitch = lerp(r.pitch, r.tpitch, k);
+      }
+      const moved = Math.hypot(r.pos[0] - ox, r.pos[2] - oz);
+      const sp = moved / Math.max(dt, 1e-4);
+      // footsteps you can hear when someone walks near you
+      if (!(r.flags & 6) && Math.abs(r.pos[1] - oy) < 0.08 && moved < 1) {
+        r.stepAcc = (r.stepAcc || 0) + moved;
+        if (r.stepAcc > 1.9) {
+          r.stepAcc = 0;
+          const below = Game.world.getBlock(Math.floor(r.pos[0]), Math.floor(r.pos[1] - 0.2), Math.floor(r.pos[2]));
+          if (below && !(r.flags & 1)) GameAudio.at(r.pos[0], r.pos[1], r.pos[2], () => GameAudio.step(below), 18);
+        }
+      }
       r.walk += sp * dt * 2.2; r.walkAmt = lerp(r.walkAmt, (r.flags & 2) ? 0 : Math.min(1, sp / 4.3), 1 - Math.exp(-8 * dt));
       r.swingT = Math.min(1, r.swingT + dt * 3.2);
     }
   },
 
+  /** replay a remote player's recorded movement a little in the past, so it stays smooth even when messages arrive unevenly */
+  replay(r, now) {
+    const delay = clamp((r.jit || 0) * 2.5 + 45, 50, 280);
+    // playback clock: runs at real speed, nudged gently toward the ideal point so it never jumps
+    const target = now - r.off - delay, el = now - (r.lastNow || now); r.lastNow = now;
+    if (r.clock === undefined || Math.abs(target - r.clock) > 600) r.clock = target;
+    else r.clock += el * (1 + clamp((target - r.clock) / 400, -0.2, 0.2));
+    const st = r.clock, S = r.snaps;
+    while (S.length > 2 && S[1].t < st - 400) S.shift();
+    let a = null, b = null;
+    for (let i = S.length - 1; i >= 0; i--) if (S[i].t <= st) { a = S[i]; b = S[i + 1] || null; break; }
+    if (!a) { a = S[0]; b = null; }
+    let p, yaw, pitch;
+    if (b) {
+      const k = clamp((st - a.t) / Math.max(1, b.t - a.t), 0, 1);
+      if (Math.hypot(b.p[0] - a.p[0], b.p[1] - a.p[1], b.p[2] - a.p[2]) > 8) p = b.p.slice(); // teleport: no sliding
+      else p = [lerp(a.p[0], b.p[0], k), lerp(a.p[1], b.p[1], k), lerp(a.p[2], b.p[2], k)];
+      yaw = lerpAngle(a.yaw, b.yaw, k); pitch = lerp(a.pitch, b.pitch, k);
+    } else {
+      // ran out of data: keep going briefly in the same direction, then hold
+      const prev = S[S.indexOf(a) - 1], ahead = Math.min(st - a.t, 150);
+      p = a.p.slice(); yaw = a.yaw; pitch = a.pitch;
+      if (prev && ahead > 0 && a.t - prev.t < 300) {
+        const f = ahead / Math.max(1, a.t - prev.t);
+        if (Math.hypot(a.p[0] - prev.p[0], a.p[2] - prev.p[2]) < 4) for (let i = 0; i < 3; i++) p[i] += (a.p[i] - prev.p[i]) * f;
+      }
+    }
+    r.pos[0] = p[0]; r.pos[1] = p[1]; r.pos[2] = p[2]; r.yaw = yaw; r.pitch = pitch;
+  },
   /* ---------- incoming ---------- */
   onPeers(ch) {
     if (!this.active) return;
@@ -3963,11 +4321,15 @@ const Net = {
     for (const p of ch.left) {
       const r = this.remotes.get(p.peer);
       if (!r) continue;
-      r.tag && r.tag.remove(); this.remotes.delete(p.peer);
+      r.tag && r.tag.remove(); this.remotes.delete(p.peer); Voice.removePeer(p.peer);
       this.chatSys(`${r.name} left the ${this.server ? 'server' : 'party'}`);
-      if (r.host && !this.isHost && !this.server) this.hostGone();
+      if (r.host && !this.server) {
+        this.elect();
+        const h = this.isHost ? null : [...this.remotes.values()].sort((a, b) => a.j - b.j)[0];
+        if (h) this.chatSys(`${h.name} is now the host`);
+      }
     }
-    if (this.server) this.elect();
+    this.elect();
     UI.partyChanged();
   },
   ingest(p) {
@@ -3978,7 +4340,7 @@ const Net = {
     if (!r) {
       r = { peer: p.peer, name: 'Player', skin: Skins.presets[0].skin, pos: s.p.map(num), tpos: s.p.map(num), yaw: 0, tyaw: 0, pitch: 0, tpitch: 0,
         walk: 0, walkAmt: 0, swingT: 1, lastSwing: null, flags: 0, held: 0, lastE: 0, lastA: 0, lastC: 0, lastH: 0, host: false, tag: null,
-        j: 9e15, cw: true, hp: 20, hurtT: 0, score: [0, 0], lastPv: 0, lastDk: 0 };
+        j: 9e15, cw: true, hp: 20, hurtT: 0, score: [0, 0], lastPv: 0, lastDk: 0, snaps: [], off: undefined, jit: 0, lastTm: null, bubble: null, speaking: false, face: null };
       // first sight: apply the whole ring, but don't replay old chat, hits or deaths
       if (Array.isArray(s.c)) r.lastC = num(s.c[0]);
       if (Array.isArray(s.pv)) for (let i = 0; i + 4 < s.pv.length; i += 5) r.lastPv = Math.max(r.lastPv, num(s.pv[i]));
@@ -3988,7 +4350,12 @@ const Net = {
     }
     if (typeof s.j === 'number' && isFinite(s.j)) r.j = s.j;
     r.cw = s.cw !== 0;
-    if (typeof s.hp === 'number') { const hp = clamp(s.hp, 0, 20); if (hp < r.hp && hp > 0) r.hurtT = 0.35; r.hp = hp; }
+    if (typeof s.hp === 'number') {
+      const hp = clamp(s.hp, 0, 20);
+      if (hp < r.hp && hp > 0) { r.hurtT = 0.35; GameAudio.at(r.pos[0], r.pos[1] + 1, r.pos[2], () => GameAudio.hurt(), 24); }
+      r.hp = hp;
+    }
+    r.voice = s.vc === 1;
     if (Array.isArray(s.sc)) r.score = [clamp(num(s.sc[0]) | 0, 0, 99999), clamp(num(s.sc[1]) | 0, 0, 99999)];
     if (this.pvp && Array.isArray(s.pv)) {
       for (let i = 0; i + 4 < s.pv.length; i += 5) {
@@ -4008,24 +4375,41 @@ const Net = {
     r.armor = Array.isArray(s.ar) ? s.ar.slice(0, 4).map(v => clamp(v | 0, 0, 3)) : [0, 0, 0, 0];
     r.tpos = [num(s.p[0]), clamp(num(s.p[1]), -64, WH + 64), num(s.p[2])];
     if (Array.isArray(s.r)) { r.tyaw = num(s.r[0]); r.tpitch = clamp(num(s.r[1]), -1.6, 1.6); }
+    if (typeof s.tm === 'number' && isFinite(s.tm) && s.tm !== r.lastTm) {
+      const now = performance.now(), off = now - s.tm;
+      if (r.lastTm !== null && s.tm < r.lastTm) { r.snaps.length = 0; r.off = undefined; r.clock = undefined; } // their clock restarted (page reload)
+      r.lastTm = s.tm;
+      if (r.off === undefined || off < r.off) r.off = off; else r.off += (off - r.off) * 0.02; // slowly follow rising latency
+      r.jit = r.jit * 0.9 + Math.abs(off - r.off) * 0.1;
+      r.snaps.push({ t: s.tm, p: r.tpos.slice(), yaw: r.tyaw, pitch: r.tpitch });
+      if (r.snaps.length > 40) r.snaps.shift();
+      if (r.snaps.length === 1) { r.pos = r.tpos.slice(); r.yaw = r.tyaw; r.pitch = r.tpitch; }
+    }
     if (Array.isArray(s.st)) {
       r.flags = num(s.st[0]) | 0; r.held = ITEMS[num(s.st[2])] ? num(s.st[2]) : 0;
-      if (r.lastSwing !== null && s.st[1] !== r.lastSwing) r.swingT = 0;
+      if (r.lastSwing !== null && s.st[1] !== r.lastSwing) { r.swingT = 0; GameAudio.at(r.pos[0], r.pos[1] + 1.4, r.pos[2], () => GameAudio.swing(), 14); }
       r.lastSwing = s.st[1];
     }
     // block edits
     if (Array.isArray(s.e)) {
+      const audible = r.lastE > 0;
       let maxSeq = r.lastE;
       for (let i = 0; i + 4 < s.e.length; i += 5) {
         const sq = num(s.e[i]); if (sq <= r.lastE) continue;
         const x = num(s.e[i + 1]) | 0, y = num(s.e[i + 2]) | 0, z = num(s.e[i + 3]) | 0, id = num(s.e[i + 4]) | 0;
-        if (y >= 0 && y < WH && (id === 0 || BLOCKS[id])) this.applyEdit(x, y, z, id);
+        if (y >= 0 && y < WH && (id === 0 || BLOCKS[id])) this.applyEdit(x, y, z, id, audible);
         if (sq > maxSeq) maxSeq = sq;
       }
       r.lastE = maxSeq;
     }
     // chat
-    if (Array.isArray(s.c) && num(s.c[0]) > r.lastC) { r.lastC = num(s.c[0]); UI.chatLine(r.name, String(s.c[1] || '').slice(0, 120)); }
+    if (Array.isArray(s.c) && num(s.c[0]) > r.lastC) {
+      r.lastC = num(s.c[0]);
+      const text = String(s.c[1] || '').slice(0, 120), to = typeof s.c[2] === 'string' ? s.c[2] : null;
+      if (to) { if (to === this.me) { UI.chatLine(`${r.name} → you`, text, false, 'whisper'); GameAudio.pop(); } }
+      else if (text[0] === '*') UI.chatLine(null, `${r.name} ${text.slice(1)}`, false, 'emote');
+      else { UI.chatLine(r.name, text); r.bubble = { text, until: performance.now() + 6000 }; }
+    }
     // host processes attacks on its creatures
     if (this.isHost && Array.isArray(s.a)) {
       for (let i = 0; i + 4 < s.a.length; i += 5) {
@@ -4057,11 +4441,21 @@ const Net = {
       this.chatSys(`${r.name} was defeated by ${k ? k.name : 'another player'}`);
     } else this.chatSys(`${r.name} ${verbs[dk[2]] || 'perished'}`);
   },
-  applyEdit(x, y, z, id) {
+  applyEdit(x, y, z, id, audible) {
     const w = Game.world;
     if (this.pvp && Game.inSafeZone(x + 0.5, z + 0.5)) return;
     if (w.getBlock(x, y, z) === id && w.isLoaded(x, z)) return;
-    if (w.isLoaded(x, z)) { w.setBlock(x, y, z, id, true); if (id === 0) Game.checkSupport(x, y, z, true); }
+    if (w.isLoaded(x, z)) {
+      const prev = w.getBlock(x, y, z);
+      w.setBlock(x, y, z, id, true); if (id === 0) Game.checkSupport(x, y, z, true);
+      // you see and hear what other players build and break
+      if (audible && prev !== id) {
+        if (id === 0 && prev && FACE_TEX[prev]) {
+          GameAudio.at(x + 0.5, y + 0.5, z + 0.5, () => GameAudio.breakBlock(prev), 28);
+          Particles.burst(x + 0.5, y + 0.5, z + 0.5, FACE_TEX[prev][prev === B.GRASS ? 2 : 0], 16, {});
+        } else if (id && !prev) GameAudio.at(x + 0.5, y + 0.5, z + 0.5, () => GameAudio.place(id), 24);
+      }
+    }
     else {
       const k = ckey(x >> 4, z >> 4); let em = w.edits.get(k); if (!em) { em = new Map(); w.edits.set(k, em); }
       em.set((x & 15) | ((z & 15) << 4) | (y << 8), id); w.editVer++;
@@ -4076,8 +4470,11 @@ const Net = {
   },
   players() {
     // [{name, host, you}]
-    const list = [{ name: Profile.data ? Profile.data.name : 'You', host: this.isHost && !this.server, you: true, k: Game.score ? Game.score.k : 0, d: Game.score ? Game.score.d : 0 }];
-    for (const r of this.remotes.values()) list.push({ name: r.name, host: r.host && !this.server, you: false, k: r.score[0], d: r.score[1] });
+    const list = [{ name: Profile.data ? Profile.data.name : 'You', host: this.isHost && !this.server, you: true, k: Game.score ? Game.score.k : 0, d: Game.score ? Game.score.d : 0, skin: Profile.data && Profile.data.skin, voice: Voice.transmitting, speaking: Voice.talking, hp: Game.player ? Math.ceil(Game.player.health) : 20 }];
+    for (const r of this.remotes.values()) {
+      const inf = this.room && this.room.info ? this.room.info(r.peer) : null;
+      list.push({ name: r.name, host: r.host && !this.server, you: false, k: r.score[0], d: r.score[1], skin: r.skin, peer: r.peer, conn: inf, voice: r.voice, speaking: r.speaking, hp: r.hp });
+    }
     if (this.pvp) list.sort((a, b) => b.k - a.k || a.d - b.d);
     return list;
   },
@@ -4102,8 +4499,14 @@ const Net = {
     const vp = R.vp, W = innerWidth, H = innerHeight;
     for (const r of this.remotes.values()) {
       if (!r.tag) { r.tag = document.createElement('div'); r.tag.className = 'tag'; layer.appendChild(r.tag); }
-      const label = this.pvp ? `${r.name}  ❤ ${Math.ceil(r.hp / 2)}` : r.name;
-      if (r.tag.textContent !== label) r.tag.textContent = label;
+      const bub = r.bubble && r.bubble.until > performance.now() ? r.bubble.text : '';
+      const label = (r.speaking ? '🔊 ' : '') + (this.pvp ? `${r.name}  ❤ ${Math.ceil(r.hp / 2)}` : r.name);
+      const key = label + '|' + bub;
+      if (r.tagKey !== key) {
+        r.tagKey = key; r.tag.textContent = '';
+        if (bub) { const bb = document.createElement('div'); bb.className = 'bubble'; bb.textContent = bub; r.tag.appendChild(bb); }
+        const nn = document.createElement('div'); nn.className = 'nm' + (r.speaking ? ' talk' : ''); nn.textContent = label; r.tag.appendChild(nn);
+      }
       const x = r.pos[0], y = r.pos[1] + ((r.flags & 1) ? 1.9 : 2.1), z = r.pos[2];
       const cw = vp[3] * x + vp[7] * y + vp[11] * z + vp[15];
       const d = Math.hypot(x - cam.eye[0], y - cam.eye[1], z - cam.eye[2]);
@@ -5743,13 +6146,14 @@ const UI = {
       case 'mpHost': this.worldsHost = true; this.show('worlds'); break;
       case 'mpJoin': this.joinFromInput(); break;
       case 'wCreate': this.profileMode = 'create'; this.show('profile'); break;
-      case 'wGuest': Profile.guest(); this.refreshChip(); this.show('title'); this.toast(`Playing as ${Profile.data.name}`); break;
+      case 'wGuest': Profile.guest(); this.refreshChip(); this.show('title'); this.toast(`Playing as ${Profile.data.name}`); this.runInvite(); break;
       case 'profile': this.profileMode = 'edit'; this.show('profile'); break;
       case 'profSave': this.saveProfile(); break;
       case 'profCancel': if (this.profileMode === 'create' && !Profile.exists) this.show('welcome'); else this.back(); break;
       case 'profAlt': this.profileAlt(); break;
       case 'party': if (Net.active) this.leavePartyConfirm(); else Game.openParty().then(() => this.refreshPause()); break;
       case 'copyCode': this.copyCode(); break;
+      case 'copyLink': this.copyLink(); break;
       case 'settings': this.show('settings'); break;
       case 'credits': this.show('credits'); break;
       case 'help': this.show('help'); break;
@@ -5843,6 +6247,8 @@ const UI = {
     { k: 'music', label: 'Music', min: 0, max: 100, step: 1, fmt: v => v + '%' },
     { k: 'sfx', label: 'Sound effects', min: 0, max: 100, step: 1, fmt: v => v + '%' },
     { k: 'ambient', label: 'Ambience', min: 0, max: 100, step: 1, fmt: v => v + '%' },
+    { k: 'voice', label: 'Voice chat', cycle: ['Off', 'Open mic', 'Push to talk (V)'] },
+    { k: 'voiceVol', label: 'Voice volume', min: 0, max: 100, step: 1, fmt: v => v + '%' },
     { k: 'showFps', label: 'Show FPS', toggle: true },
     { sec: 'Gameplay' },
     { k: 'difficulty', label: 'Difficulty', cycle: DIFFICULTY },
@@ -5903,6 +6309,7 @@ const UI = {
     $('fpsBox').classList.toggle('hidden', !Settings.showFps || !!Game.debug);
     resize();
     if (typeof setAniso === 'function') setAniso(GFX.aniso);
+    if (typeof Voice !== 'undefined' && Net.active) Voice.apply();
     this.lastHearts = this.lastFood = ''; this.lastInvVer = -1; this.lastArmor = -1;
     $('musicBtn').style.opacity = Settings.music > 0 ? 1 : 0.45;
   },
@@ -6376,7 +6783,7 @@ Object.assign(UI, {
       this.toast(ok ? 'Profile saved' : 'Saved here, but the online copy could not be updated.');
     }
     this.profileMode = 'edit'; this.refreshChip();
-    if (Game.state === 'play') this.show('pause'); else this.show('title');
+    if (Game.state === 'play') this.show('pause'); else { this.show('title'); this.runInvite(); }
   },
   profileAlt() {
     const p = Profile.data;
@@ -6534,6 +6941,7 @@ Object.assign(UI, {
     $('partyCodeBig').textContent = srv ? srv.name : on ? Net.pretty(Net.code) : '';
     $('partyCodeBig').style.letterSpacing = srv ? '1px' : '';
     $('copyCodeBtn').style.display = srv ? 'none' : '';
+    $('copyLinkBtn').style.display = Cloud.mode === 'relay' ? '' : 'none';
     const pb = $('partyBtn');
     pb.style.display = (Net.available && Game.state === 'play' && !srv) ? '' : 'none';
     if (srv) {
@@ -6541,13 +6949,13 @@ Object.assign(UI, {
       $('quitBtn').textContent = 'Leave Server';
       return;
     }
-    pb.textContent = on ? (Net.isHost ? 'Close Party' : 'Leave Party (keep playing)') : 'Open to Party';
+    pb.textContent = on ? 'Leave Party (keep playing)' : 'Open to Party';
     $('modeBtn').style.display = on && !Net.isHost ? 'none' : '';
     $('quitBtn').textContent = on && !Net.isHost ? 'Leave Party & Quit' : (Game.worldId ? 'Save & Quit to Title' : 'Quit to Title');
   },
   leavePartyConfirm() {
     if (Net.isHost) {
-      this.confirm('Close the party?', 'Everyone else will be disconnected. Your world stays saved.', async () => { await Net.leave(); this.show('pause'); }, 'pause');
+      this.confirm('Leave the party?', 'Your world stays saved. Everyone else keeps playing — the next player becomes the host.', async () => { await Net.leave(); this.show('pause'); }, 'pause');
     } else {
       this.confirm('Leave the party?', 'You can keep exploring a copy of this world on your own, and save it.', async () => {
         await Net.leave(); Game.worldId = newId(); Game.worldName = Game.worldName.replace(/ \(party\)$/, '') + ' (copy)'; this.show('pause');
@@ -6562,6 +6970,7 @@ Object.assign(UI, {
   partyChanged() {
     const on = Net.active && this.hudOn;
     $('partyBox').classList.toggle('hidden', !on);
+    this.micTag();
     if (on) {
       $('partyLabel').textContent = Net.server ? 'Server' : 'Party';
       $('partyCode').textContent = Net.server ? Net.server.name : Net.pretty(Net.code);
@@ -6575,24 +6984,96 @@ Object.assign(UI, {
     if (this.cur === 'pause') this.refreshPause();
   },
 
+  /* ---------- player list (hold Tab) ---------- */
+  showPlayers(on) {
+    on = on && Net.active && Game.state === 'play';
+    $('plist').classList.toggle('hidden', !on);
+    clearInterval(this.plT);
+    if (on) { this.drawPlayers(); this.plT = setInterval(() => this.drawPlayers(), 400); }
+  },
+  drawPlayers() {
+    const list = Net.players();
+    $('plTitle').textContent = Net.server ? Net.server.name : 'Party ' + Net.pretty(Net.code);
+    const direct = list.filter(p => p.conn && p.conn.direct).length;
+    $('plSub').textContent = `${list.length} player${list.length === 1 ? '' : 's'}` + (Cloud.mode === 'relay' && list.length > 1 ? ` · ${direct}/${list.length - 1} direct` : '');
+    const box = $('plRows'); box.innerHTML = '';
+    for (const p of list) {
+      const row = document.createElement('div'); row.className = 'prow' + (p.you ? ' you' : '');
+      const cv = document.createElement('canvas'); cv.width = cv.height = 24;
+      try { const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(Skins.face(p.skin, 24), 0, 0); } catch (e) { }
+      const n = document.createElement('div'); n.className = 'pn'; n.textContent = (p.host ? '★ ' : '') + p.name + (p.you ? ' (you)' : '');
+      const k = document.createElement('div'); k.className = 'pk'; k.textContent = Net.pvp ? `⚔${p.k} ☠${p.d}` : `❤ ${Math.ceil((p.hp || 0) / 2)}`;
+      const v = document.createElement('div'); v.className = 'pv'; v.textContent = p.speaking ? '🔊' : p.voice ? '🎤' : '';
+      const c = document.createElement('div'); c.className = 'pc';
+      if (p.you) c.textContent = Cloud.mode === 'relay' ? (Relay.connected ? 'online' : 'reconnecting…') : 'online';
+      else if (!p.conn) c.textContent = '—';
+      else {
+        const ms = p.conn.rtt ? `${p.conn.rtt} ms` : '…';
+        c.textContent = p.conn.direct ? `direct · ${ms}` : p.conn.connecting ? `relay · ${ms} ↻` : `relay · ${ms}`;
+        if (!p.conn.direct) c.classList.add('relay');
+        if (p.conn.rtt > 250) c.classList.add('slow');
+      }
+      row.append(cv, n, k, v, c); box.appendChild(row);
+    }
+  },
+  micTag() {
+    const el = $('micTag'); if (!el) return;
+    const on = Net.active && Settings.voice > 0 && Voice.track && this.hudOn;
+    el.classList.toggle('hidden', !on);
+    if (!on) return;
+    el.classList.toggle('live', Voice.transmitting);
+    el.textContent = Voice.talking ? '🎤 Talking…' : Voice.transmitting ? '🎤 Mic on' : '🎤 Hold V to talk';
+  },
+  inviteURL() {
+    if (Cloud.mode !== 'relay') return null;
+    const base = location.origin + location.pathname;
+    if (Game.server) return base + '#server=' + encodeURIComponent(Game.server.id);
+    if (Net.active && Net.code) return base + '#party=' + Net.code;
+    return null;
+  },
+  copyLink() {
+    const url = this.inviteURL(); if (!url) return;
+    try { navigator.clipboard.writeText(url).then(() => this.toast('Invite link copied — send it to a friend'), () => this.toast(url)); }
+    catch (e) { this.toast(url); }
+  },
+  /** opened from an invite link: join right away (after picking a profile if needed) */
+  async runInvite() {
+    const inv = this.pendingInvite; if (!inv || !Profile.exists || Game.state !== 'menu') return;
+    this.pendingInvite = null;
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { }
+    if (inv.party) {
+      this.show('multi'); $('joinCode').value = Net.pretty(inv.party);
+      $('mpStatus').textContent = 'Joining your friend’s party…';
+      this.joinFromInput();
+    } else if (inv.server) {
+      this.show('servers');
+      const list = await Servers.fetch();
+      const s = list.find(x => x.id === inv.server);
+      if (s) this.joinServerUI(s); else $('srvStatus').textContent = 'That server no longer exists.';
+    }
+  },
+
   /* ---------- chat ---------- */
-  chatLine(name, text, mine) {
+  chatLine(name, text, mine, kind) {
     const log = $('chatLog');
-    const d = document.createElement('div'); d.className = 'cl' + (name ? '' : ' sys');
+    const d = document.createElement('div'); d.className = 'cl' + (name ? '' : ' sys') + (kind ? ' ' + kind : '');
     if (name) { const b = document.createElement('b'); b.textContent = name + ': '; d.appendChild(b); }
     d.appendChild(document.createTextNode(text));
     log.appendChild(d);
-    while (log.children.length > 8) log.firstChild.remove();
-    setTimeout(() => d.classList.add('fade'), 9000); setTimeout(() => d.remove(), 10200);
+    while (log.children.length > 60) log.firstChild.remove();
+    if ($('chat').classList.contains('open')) log.scrollTop = log.scrollHeight;
+    setTimeout(() => d.classList.add('fade'), 9000); setTimeout(() => d.classList.add('gone'), 10200);
   },
-  openChat() {
+  openChat(prefill) {
     if (!Net.active || Game.ui) return;
     Game.ui = 'chat'; Input.keys = {}; Input.mouseL = Input.mouseR = false;
-    const inp = $('chatInput'); inp.classList.remove('hidden'); inp.value = ''; setTimeout(() => inp.focus(), 0);
+    $('chat').classList.add('open'); const log = $('chatLog'); log.scrollTop = log.scrollHeight;
+    const inp = $('chatInput'); inp.classList.remove('hidden'); inp.value = prefill || ''; setTimeout(() => inp.focus(), 0);
   },
   closeChat(send) {
     const inp = $('chatInput');
     if (send && inp.value.trim()) Net.chat(inp.value);
+    $('chat').classList.remove('open');
     inp.classList.add('hidden'); inp.blur();
     Game.ui = null;
     if (!Input.locked && !Input.noLock) lockPointer(true);
@@ -6679,7 +7160,7 @@ function bindInput() {
     const inv = Game.inv;
     inv.sel = (inv.sel + (e.deltaY > 0 ? 1 : -1) + 9) % 9;
   }, { passive: true });
-  window.addEventListener('blur', () => { Input.keys = {}; Input.mouseL = Input.mouseR = false; });
+  window.addEventListener('blur', () => { Input.keys = {}; Input.mouseL = Input.mouseR = false; UI.showPlayers(false); Voice.setPTT(false); });
   window.addEventListener('keydown', e => {
     const code = e.code;
     if (e.target && e.target.tagName === 'INPUT') return;
@@ -6694,6 +7175,9 @@ function bindInput() {
       if (code.startsWith('Digit')) { const n = +code.slice(5); if (n >= 1 && n <= 9) Game.inv.sel = n - 1; }
       else if (code === 'KeyE') UI.openInventory();
       else if (code === 'KeyT' && Net.active) { e.preventDefault(); UI.openChat(); }
+      else if (code === 'Slash' && Net.active) { e.preventDefault(); UI.openChat('/'); }
+      else if (code === 'Tab' && Net.active) UI.showPlayers(true);
+      else if (code === 'KeyV' && Net.active) Voice.setPTT(true);
       else if (code === 'F5') { e.preventDefault(); Game.view = ((Game.view || 0) + 1) % 3; }
       else if (code === 'KeyQ') dropHeld(e.ctrlKey || e.metaKey);
       else if (code === 'F3') { Game.debug = !Game.debug; $('debug').classList.toggle('hidden', !Game.debug); $('fpsBox').classList.toggle('hidden', Game.debug || !Settings.showFps); }
@@ -6713,7 +7197,11 @@ function bindInput() {
       if (code === 'Escape' && UI.cur && UI.cur !== 'title') { GameAudio.click(); UI.show('title'); }
     }
   });
-  window.addEventListener('keyup', e => { Input.keys[e.code] = false; });
+  window.addEventListener('keyup', e => {
+    Input.keys[e.code] = false;
+    if (e.code === 'Tab') UI.showPlayers(false);
+    if (e.code === 'KeyV') Voice.setPTT(false);
+  });
   window.addEventListener('resize', resize);
   document.addEventListener('visibilitychange', () => { if (document.hidden && Game.state === 'play' && Game.worldId) Game.saveWorld(); });
   window.addEventListener('pagehide', () => { if (Game.state === 'play' && Game.worldId && !Saves.cloud) { try { Saves.save(Game.buildSave()); } catch (e) { } } });
@@ -6768,11 +7256,21 @@ function showError(msg) {
     $('profileChip').addEventListener('click', () => { GameAudio.init(); GameAudio.click(); UI.act('profile'); });
     $('joinCode').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') UI.act('mpJoin'); });
     $('pName').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') UI.act('profSave'); });
+    const readInvite = () => {
+      const m = /^#(party|server)=([A-Za-z0-9-]{3,40})$/.exec(location.hash || '');
+      if (!m) return false;
+      UI.pendingInvite = m[1] === 'party' ? { party: Net.norm(m[2]) } : { server: m[2].toLowerCase() };
+      return true;
+    };
+    window.addEventListener('hashchange', () => { if (readInvite() && Cloud.ready && Profile.exists) UI.runInvite(); });
+    readInvite();
     Cloud.init().then(() => Profile.load()).then(() => {
       if (!Cloud.canAccount) $('wCreateSub').textContent = 'Pick a name and skin for multiplayer. Your account and worlds are kept in this browser.';
       UI.refreshChip(); UI.refreshContinue();
       if (!Profile.exists && UI.cur === 'title') UI.show('welcome');
       else if (UI.cur === 'title') UI.show('title');
+      if (UI.pendingInvite && Profile.exists) UI.runInvite();
+      else if (UI.pendingInvite) $('wCreateSub').textContent = 'Pick a name and skin — then you’ll join your friend straight away.';
     });
     requestAnimationFrame(t => { lastT = t; loop(t); });
   };

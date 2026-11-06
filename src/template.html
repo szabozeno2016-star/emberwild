@@ -313,7 +313,26 @@ input[type=range]::-moz-range-thumb{width:14px;height:24px;background:#8a8580;bo
 #partyInfo .code{font-size:30px;letter-spacing:6px;color:#ffd18a;font-weight:700}
 /* ---------- multiplayer HUD ---------- */
 #tags{position:fixed;inset:0;pointer-events:none;z-index:4;overflow:hidden}
-.tag{position:absolute;left:0;top:0;padding:2px 8px;background:rgba(0,0,0,.5);color:#fff;font-size:15px;white-space:nowrap;text-shadow:1px 1px 0 #000}
+.tag{position:absolute;left:0;top:0;display:flex;flex-direction:column;align-items:center;gap:4px;color:#fff;font-size:15px;white-space:nowrap;text-shadow:1px 1px 0 #000}
+#tags .tag .nm{padding:2px 8px;background:rgba(0,0,0,.5)}
+#tags .tag .nm.talk{box-shadow:0 0 0 2px #7fe07a}
+#tags .tag .bubble{max-width:240px;white-space:normal;text-align:center;padding:4px 10px;background:rgba(255,248,235,.95);color:#2a1f17;text-shadow:none;font-size:15px;border:2px solid rgba(0,0,0,.55);position:relative;animation:bubIn .18s ease-out}
+#tags .tag .bubble:after{content:'';position:absolute;left:50%;bottom:-8px;margin-left:-6px;border:6px solid transparent;border-top-color:rgba(255,248,235,.95)}
+@keyframes bubIn{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
+#chat.open #chatLog{max-height:min(46vh,380px);overflow-y:auto;pointer-events:auto}
+#chat.open .cl,#chat.open .cl.fade{opacity:1;display:block}
+.cl.gone{display:none}
+.cl.whisper{color:#e2b8ff}.cl.whisper b{color:#d39cff}.cl.emote{color:#cfe8ff;font-style:italic}
+#plist{position:absolute;left:50%;top:60px;transform:translateX(-50%);min-width:min(520px,92vw);background:rgba(14,10,8,.82);border:3px solid rgba(0,0,0,.65);padding:10px 14px;z-index:6}
+#plist .plh{display:flex;justify-content:space-between;align-items:baseline;gap:16px;border-bottom:2px solid rgba(255,180,90,.25);padding-bottom:6px;margin-bottom:6px}
+#plist .plh b{font-size:18px;color:#ffd18a}#plist .plh span{font-size:13px;color:#b9a48c}
+.prow{display:grid;grid-template-columns:26px 1fr auto auto auto;gap:10px;align-items:center;padding:3px 0;font-size:16px}
+.prow canvas{width:24px;height:24px;image-rendering:pixelated}
+.prow .pn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.prow.you .pn{color:#ffd18a}
+.prow .pk{font-size:14px;color:#ffb36b}.prow .pc{font-size:13px;color:#9cd98a;text-align:right;min-width:92px}.prow .pc.relay{color:#e8c06a}.prow .pc.slow{color:#ff8a6a}
+.prow .pv{width:18px;text-align:center}
+#micTag{position:absolute;left:12px;bottom:84px;padding:3px 10px;background:rgba(0,0,0,.55);border:2px solid rgba(255,255,255,.18);font-size:14px;color:#ddd}
+#micTag.live{border-color:#7fe07a;color:#c9ffc4}
 #partyBox{position:absolute;right:12px;top:12px;padding:8px 12px;background:rgba(14,10,8,.62);border:3px solid rgba(0,0,0,.6);min-width:150px}
 #partyBox .pt{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#e59a52}
 #partyBox .pt b{color:#ffd18a;letter-spacing:3px}
@@ -348,6 +367,8 @@ input[type=range]::-moz-range-thumb{width:14px;height:24px;background:#8a8580;bo
   <div id="pickups"></div>
   <div id="partyBox" class="hidden"><div class="pt"><span id="partyLabel">Party</span> <b id="partyCode"></b></div><div id="partyList"></div></div>
   <div id="zoneTag" class="hidden">Safe zone</div>
+  <div id="plist" class="hidden"><div class="plh"><b id="plTitle"></b><span id="plSub"></span></div><div id="plRows"></div></div>
+  <div id="micTag" class="hidden"></div>
   <div id="chat"><div id="chatLog"></div><input id="chatInput" class="hidden" maxlength="120" placeholder="Say something… Enter to send, Esc to cancel" autocomplete="off"></div>
   <div id="hudBottom">
     <div id="itemName"></div>
@@ -509,6 +530,9 @@ input[type=range]::-moz-range-thumb{width:14px;height:24px;background:#8a8580;bo
       <kbd>Q</kbd><span>Drop item (Ctrl+Q drops the stack)</span>
       <kbd>Middle click</kbd><span>Pick the block you’re looking at</span>
       <kbd>F5</kbd><span>Switch camera: first person, behind, in front</span>
+      <kbd>T</kbd><span>Chat in multiplayer — <b>/</b> for commands: /msg, /tp, /me, /list</span>
+      <kbd>Tab</kbd><span>Hold to see everyone in your game and their connection</span>
+      <kbd>V</kbd><span>Push to talk (turn on Voice chat in Settings)</span>
       <kbd>Right click</kbd><span>On a furnace: smelt · on a bed: sleep · with armour: equip</span>
       <kbd>T</kbd><span>Chat (in a party)</span>
       <kbd>F1 · F3</kbd><span>Hide HUD · debug info</span>
@@ -538,7 +562,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:24px;background:#8a8580;bo
   <div class="panel"><h2>Game Paused</h2>
     <button class="btn primary" data-act="resume">Back to Game</button>
     <button class="btn" data-act="settings">Settings</button>
-    <div id="partyInfo"><div style="font-size:13px;color:#cdbfae" id="partyInfoLabel">PARTY CODE</div><div class="code" id="partyCodeBig"></div><button class="btn" data-act="copyCode" id="copyCodeBtn" style="height:36px;font-size:15px;margin:6px auto 0;width:200px">Copy code</button></div>
+    <div id="partyInfo"><div style="font-size:13px;color:#cdbfae" id="partyInfoLabel">PARTY CODE</div><div class="code" id="partyCodeBig"></div><div style="display:flex;gap:8px;justify-content:center;margin-top:6px"><button class="btn" data-act="copyCode" id="copyCodeBtn" style="height:36px;font-size:15px;width:150px">Copy code</button><button class="btn" data-act="copyLink" id="copyLinkBtn" style="height:36px;font-size:15px;width:190px">Copy invite link</button></div></div>
     <button class="btn" data-act="party" id="partyBtn">Open to Party</button>
     <button class="btn" data-act="toggleMode" id="modeBtn">Game Mode: Survival</button>
     <button class="btn" data-act="profile">Profile &amp; Skin</button>

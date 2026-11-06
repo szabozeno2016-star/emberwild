@@ -39,7 +39,7 @@ const GameAudio = {
     const f = c.createBiquadFilter(); f.type = o.type || 'bandpass'; f.frequency.value = o.freq || 1000; f.Q.value = o.q || 1;
     const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(o.gain || 0.3, t + (o.attack || 0.004));
     g.gain.exponentialRampToValueAtTime(0.0001, t + (o.attack || 0.004) + (o.decay || 0.1));
-    src.connect(f); f.connect(g); g.connect(o.bus || this.sfx);
+    src.connect(f); f.connect(g); g.connect(o.bus || this.curBus || this.sfx);
     src.start(t, Math.random() * 1.2, (o.decay || 0.1) + 0.05);
   },
   tone(o) {
@@ -49,8 +49,26 @@ const GameAudio = {
     if (o.to) osc.frequency.exponentialRampToValueAtTime(o.to, t + (o.decay || 0.2));
     const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(o.gain || 0.2, t + (o.attack || 0.005));
     g.gain.exponentialRampToValueAtTime(0.0001, t + (o.attack || 0.005) + (o.decay || 0.2));
-    osc.connect(g); g.connect(o.bus || this.sfx);
+    osc.connect(g); g.connect(o.bus || this.curBus || this.sfx);
     osc.start(t); osc.stop(t + (o.attack || 0.005) + (o.decay || 0.2) + 0.05);
+  },
+  /** play a sound as if it came from a point in the world: quieter with distance, panned left/right */
+  at(x, y, z, fn, range) {
+    if (!this.ready || !Game.player || Game.state !== 'play') return;
+    range = range || 24;
+    const e = Game.eyePos(), dx = x - e[0], dy = y - e[1], dz = z - e[2], d = Math.hypot(dx, dy, dz);
+    if (d > range) return;
+    const c = this.ctx, g = c.createGain(); g.gain.value = Math.pow(1 - d / range, 1.5);
+    let out = g;
+    if (c.createStereoPanner) {
+      const yaw = Game.player.yaw, rx = Math.cos(yaw), rz = Math.sin(yaw);
+      const p = c.createStereoPanner(); p.pan.value = d > 0.5 ? clamp((dx * rx + dz * rz) / d, -1, 1) * 0.85 : 0;
+      g.connect(p); out = p;
+    }
+    out.connect(this.sfx);
+    this.curBus = g;
+    try { fn(); } finally { this.curBus = null; }
+    setTimeout(() => { try { g.disconnect(); out.disconnect(); } catch (err) { } }, 2500);
   },
   mat(id) { return (BLOCKS[id] && BLOCKS[id].sound) || 'stone'; },
   dig(id, vol) {

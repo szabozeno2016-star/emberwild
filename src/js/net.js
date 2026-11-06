@@ -69,11 +69,13 @@ const Net = {
   },
   setup(room, code, isHost) {
     this.room = room; this.code = code; this.isHost = isHost; this.active = true; this.hostLeft = false;
+    if (!this.server) this.myJ = isHost ? Date.now() - 1e9 : Date.now(); // the host who opened the party stays first in line
     this.remotes.clear(); this.ring = []; this.atkRing = []; this.hitRing = []; this.sent = {}; this.seq = 0;
     const meP = room.peers().find(p => p.sameTab); this.me = meP ? meP.peer : null;
     this.unsub.push(room.onPeers(ch => this.onPeers(ch), e => this.onError(e)));
     Game.world.onEdit = (x, y, z, id) => this.localEdit(x, y, z, id);
     UI.partyChanged();
+    Voice.apply();
   },
   setupServer(room, srv) {
     this.server = srv; this.pvp = srv.mode === 'pvp'; this.myJ = Date.now(); this.saver = false;
@@ -84,16 +86,34 @@ const Net = {
   },
   /** servers: the longest-connected player runs the world; the longest-connected writer saves it */
   elect() {
-    if (!this.server || !this.active) return;
+    if (!this.active) return;
     const me = { peer: this.me || '~', j: this.myJ, cw: Servers.canWrite !== false, me: true };
     const all = [me, ...[...this.remotes.values()].map(r => ({ peer: r.peer, j: r.j, cw: r.cw }))];
     all.sort((a, b) => (a.j - b.j) || (a.peer < b.peer ? -1 : a.peer > b.peer ? 1 : 0));
     const keeper = !!all[0].me;
-    if (keeper !== this.isHost) { this.isHost = keeper; Mobs.clear(); }
+    if (keeper !== this.isHost) {
+      this.isHost = keeper; Mobs.clear();
+      if (!this.server && keeper) this.becomeHost();
+    }
+    if (!this.server) return;
     const w = all.find(x => x.cw);
     const saver = !!Cloud.sdb && !!w && !!w.me;
     if (saver && !this.saver) { this.hbT = Math.min(this.hbT, 1); }
     this.saver = saver;
+  },
+  /** party host left: the longest-connected player takes over, so the party keeps going */
+  async becomeHost() {
+    if (!Game.worldId) { Game.worldId = newId(); Game.created = Date.now(); }
+    this.chatSys('You are now the party host — this world is saved to your worlds.');
+    UI.banner('You are the host now', `Party ${this.pretty(this.code)} keeps going`);
+    if (Cloud.sdb && this.code) {
+      try {
+        await Cloud.sdb.doc('parties/' + this.code).set(this.partyDoc());
+        await Shared.putText('parties/' + this.code + '/edits', Game.world.encodeEdits());
+        this.persist = true; this.docVer = Game.world.editVer;
+      } catch (e) { this.persist = false; }
+    }
+    UI.refreshPause && UI.refreshPause();
   },
   async saveServer() {
     if (!this.server || this.docBusy || !Game.world) return;
@@ -112,6 +132,7 @@ const Net = {
       }
     }
     const room = this.room, code = this.code, wasHost = this.isHost, persist = this.persist;
+    this.lastPeers = this.remotes.size;
     this.active = false; this.room = null;
     this.unsub.forEach(u => { try { u(); } catch (e) { } }); this.unsub = [];
     for (const r of this.remotes.values()) r.tag && r.tag.remove();
@@ -119,7 +140,8 @@ const Net = {
     if (Game.world) Game.world.onEdit = null;
     if (!wasHost) Mobs.clear();
     if (room) { try { await room.leave(); } catch (e) { } }
-    if (wasHost && persist && Cloud.sdb) { try { await Cloud.sdb.doc('parties/' + code).delete(); await Shared.removeText('parties/' + code + '/edits'); } catch (e) { } }
+    if (wasHost && persist && Cloud.sdb && this.lastPeers === 0) { try { await Cloud.sdb.doc('parties/' + code).delete(); await Shared.removeText('parties/' + code + '/edits'); } catch (e) { } }
+    Voice.stop(); Voice.clear();
     this.code = null; this.isHost = false; this.server = null; this.pvp = false; this.saver = false; this.dk = null; this.pvRing = [];
     UI.partyChanged();
   },
@@ -158,11 +180,40 @@ const Net = {
     }
     return best ? { r: best, t: bt } : null;
   },
+  clean(text) { return [...String(text)].filter(ch => { const c = ch.codePointAt(0); return !(c < 32 || (c >= 0x7f && c <= 0x9f) || (c >= 0x200b && c <= 0x200f) || (c >= 0x2028 && c <= 0x202e) || (c >= 0x2060 && c <= 0x206f) || c === 0xfeff); }).join('').trim().slice(0, 120); },
+  findPlayer(q) {
+    q = String(q || '').toLowerCase(); if (!q) return null;
+    const list = [...this.remotes.values()];
+    return list.find(r => r.name.toLowerCase() === q) || list.find(r => r.name.toLowerCase().startsWith(q)) || null;
+  },
   chat(text) {
-    text = [...String(text)].filter(ch => { const c = ch.codePointAt(0); return !(c < 32 || (c >= 0x7f && c <= 0x9f) || (c >= 0x200b && c <= 0x200f) || (c >= 0x2028 && c <= 0x202e) || (c >= 0x2060 && c <= 0x206f) || c === 0xfeff); }).join('').trim().slice(0, 120);
+    text = this.clean(text);
     if (!text) return;
+    if (text[0] === '/') return this.command(text);
     this.chatMsg = [++this.chatSeq, text];
     UI.chatLine(Profile.data.name, text, true);
+  },
+  command(text) {
+    const [cmd, ...rest] = text.slice(1).split(/\s+/), arg = rest.join(' ');
+    const c = cmd.toLowerCase();
+    if (c === 'help' || c === '?') {
+      ['/msg <player> <text> — private message', '/tp <player> — teleport to a player', '/me <action> — describe what you do', '/list — who is here', 'Hold Tab — player list with connection quality']
+        .forEach(l => this.chatSys(l));
+    } else if (c === 'list' || c === 'who') {
+      const ps = this.players(); this.chatSys(`${ps.length} here: ` + ps.map(p => p.name + (p.you ? ' (you)' : '')).join(', '));
+    } else if (c === 'msg' || c === 'w' || c === 'tell' || c === 'whisper') {
+      const r = this.findPlayer(rest[0]), body = this.clean(rest.slice(1).join(' '));
+      if (!r) this.chatSys(`No player called “${rest[0] || ''}” here.`);
+      else if (!body) this.chatSys('Usage: /msg <player> <text>');
+      else { this.chatMsg = [++this.chatSeq, body, r.peer]; UI.chatLine(`You → ${r.name}`, body, true, 'whisper'); }
+    } else if (c === 'me') {
+      if (arg) { this.chatMsg = [++this.chatSeq, '*' + arg]; UI.chatLine(null, `${Profile.data.name} ${arg}`, true, 'emote'); }
+    } else if (c === 'tp' || c === 'goto') {
+      const r = this.findPlayer(arg);
+      if (this.pvp) this.chatSys('Teleporting is off on PVP servers.');
+      else if (!r) this.chatSys(`No player called “${arg}” here.`);
+      else { const P = Game.player; P.pos = [r.pos[0] + 0.8, r.pos[1] + 0.1, r.pos[2] + 0.8]; P.vel = [0, 0, 0]; P.fallDist = 0; this.chatSys(`Teleported to ${r.name}`); GameAudio.poof(); }
+    } else this.chatSys(`Unknown command /${cmd} — try /help`);
   },
   chatSys(text) { UI.chatLine(null, text); },
   buildPresence() {
@@ -172,10 +223,10 @@ const Net = {
       p: [r2(P.pos[0]), r2(P.pos[1]), r2(P.pos[2])], r: [r2(P.yaw), r2(P.pitch)],
       st: [(P.sneak ? 1 : 0) | (P.flying ? 2 : 0) | (P.alive ? 0 : 4), this.swingCount, Game.inv.held ? Game.inv.held.id : 0],
       e: [].concat(...this.ring), a: [].concat(...this.atkRing), c: this.chatMsg, ar: Game.inv.armorMats(),
-      hp: P.alive ? Math.max(0, Math.ceil(P.health)) : 0,
+      hp: P.alive ? Math.max(0, Math.ceil(P.health)) : 0, j: this.myJ, vc: Voice.transmitting ? 1 : 0,
     };
     if (this.server) {
-      o.j = this.myJ; o.cw = Servers.canWrite === false ? 0 : 1;
+      o.cw = Servers.canWrite === false ? 0 : 1;
       if (this.pvp) { o.pv = [].concat(...this.pvRing); o.sc = [Game.score.k, Game.score.d]; o.dk = this.dk; }
     }
     if (this.isHost) {
@@ -189,14 +240,20 @@ const Net = {
   },
   update(dt) {
     if (!this.active) return;
-    // send presence (~12 Hz), only the fields that changed
-    this.sendT -= dt;
+    // send presence: 20 Hz over direct links, 10-12 Hz through relays — only the fields that changed,
+    // stamped with our clock so others can replay our movement smoothly
+    this.sendT -= dt; this.idleT = (this.idleT || 0) + dt;
     if (this.sendT <= 0) {
-      this.sendT = Cloud.mode === 'relay' ? 0.1 : 0.08;
+      const direct = this.room.allDirect;
+      this.sendT = direct ? 0.05 : Cloud.mode === 'relay' ? 0.1 : 0.08;
       const o = this.buildPresence(), patch = {}; let any = false;
       for (const k in o) { const s = JSON.stringify(o[k]); if (this.sent[k] !== s) { patch[k] = o[k]; this.sent[k] = s; any = true; } }
-      if (any) this.room.presence(patch).catch(e => { if (e && e.code === 'invalid_argument') { this.ring = this.ring.slice(-8); this.sent = {}; } });
+      if (any || this.idleT > 0.5) {
+        patch.tm = Math.round(performance.now()); this.idleT = 0;
+        this.room.presence(patch).catch(e => { if (e && e.code === 'invalid_argument') { this.ring = this.ring.slice(-8); this.sent = {}; } });
+      }
     }
+    Voice.update(dt);
     // host: keep the party doc's edits fresh for late joiners
     if (this.isHost && this.persist) {
       this.docT -= dt;
@@ -217,19 +274,61 @@ const Net = {
       }
     }
     // interpolate remote players
+    const now = performance.now();
     for (const r of this.remotes.values()) {
       if (r.hurtT > 0) r.hurtT -= dt;
-      const k = 1 - Math.exp(-12 * dt);
-      const ox = r.pos[0], oz = r.pos[2];
-      for (let i = 0; i < 3; i++) r.pos[i] = lerp(r.pos[i], r.tpos[i], k);
-      let dy = r.tyaw - r.yaw; while (dy > Math.PI) dy -= Math.PI * 2; while (dy < -Math.PI) dy += Math.PI * 2;
-      r.yaw += dy * k; r.pitch = lerp(r.pitch, r.tpitch, k);
-      const sp = Math.hypot(r.pos[0] - ox, r.pos[2] - oz) / Math.max(dt, 1e-4);
+      const ox = r.pos[0], oy = r.pos[1], oz = r.pos[2];
+      if (r.snaps.length) this.replay(r, now);
+      else {
+        const k = 1 - Math.exp(-12 * dt);
+        for (let i = 0; i < 3; i++) r.pos[i] = lerp(r.pos[i], r.tpos[i], k);
+        r.yaw = lerpAngle(r.yaw, r.tyaw, k); r.pitch = lerp(r.pitch, r.tpitch, k);
+      }
+      const moved = Math.hypot(r.pos[0] - ox, r.pos[2] - oz);
+      const sp = moved / Math.max(dt, 1e-4);
+      // footsteps you can hear when someone walks near you
+      if (!(r.flags & 6) && Math.abs(r.pos[1] - oy) < 0.08 && moved < 1) {
+        r.stepAcc = (r.stepAcc || 0) + moved;
+        if (r.stepAcc > 1.9) {
+          r.stepAcc = 0;
+          const below = Game.world.getBlock(Math.floor(r.pos[0]), Math.floor(r.pos[1] - 0.2), Math.floor(r.pos[2]));
+          if (below && !(r.flags & 1)) GameAudio.at(r.pos[0], r.pos[1], r.pos[2], () => GameAudio.step(below), 18);
+        }
+      }
       r.walk += sp * dt * 2.2; r.walkAmt = lerp(r.walkAmt, (r.flags & 2) ? 0 : Math.min(1, sp / 4.3), 1 - Math.exp(-8 * dt));
       r.swingT = Math.min(1, r.swingT + dt * 3.2);
     }
   },
 
+  /** replay a remote player's recorded movement a little in the past, so it stays smooth even when messages arrive unevenly */
+  replay(r, now) {
+    const delay = clamp((r.jit || 0) * 2.5 + 45, 50, 280);
+    // playback clock: runs at real speed, nudged gently toward the ideal point so it never jumps
+    const target = now - r.off - delay, el = now - (r.lastNow || now); r.lastNow = now;
+    if (r.clock === undefined || Math.abs(target - r.clock) > 600) r.clock = target;
+    else r.clock += el * (1 + clamp((target - r.clock) / 400, -0.2, 0.2));
+    const st = r.clock, S = r.snaps;
+    while (S.length > 2 && S[1].t < st - 400) S.shift();
+    let a = null, b = null;
+    for (let i = S.length - 1; i >= 0; i--) if (S[i].t <= st) { a = S[i]; b = S[i + 1] || null; break; }
+    if (!a) { a = S[0]; b = null; }
+    let p, yaw, pitch;
+    if (b) {
+      const k = clamp((st - a.t) / Math.max(1, b.t - a.t), 0, 1);
+      if (Math.hypot(b.p[0] - a.p[0], b.p[1] - a.p[1], b.p[2] - a.p[2]) > 8) p = b.p.slice(); // teleport: no sliding
+      else p = [lerp(a.p[0], b.p[0], k), lerp(a.p[1], b.p[1], k), lerp(a.p[2], b.p[2], k)];
+      yaw = lerpAngle(a.yaw, b.yaw, k); pitch = lerp(a.pitch, b.pitch, k);
+    } else {
+      // ran out of data: keep going briefly in the same direction, then hold
+      const prev = S[S.indexOf(a) - 1], ahead = Math.min(st - a.t, 150);
+      p = a.p.slice(); yaw = a.yaw; pitch = a.pitch;
+      if (prev && ahead > 0 && a.t - prev.t < 300) {
+        const f = ahead / Math.max(1, a.t - prev.t);
+        if (Math.hypot(a.p[0] - prev.p[0], a.p[2] - prev.p[2]) < 4) for (let i = 0; i < 3; i++) p[i] += (a.p[i] - prev.p[i]) * f;
+      }
+    }
+    r.pos[0] = p[0]; r.pos[1] = p[1]; r.pos[2] = p[2]; r.yaw = yaw; r.pitch = pitch;
+  },
   /* ---------- incoming ---------- */
   onPeers(ch) {
     if (!this.active) return;
@@ -238,11 +337,15 @@ const Net = {
     for (const p of ch.left) {
       const r = this.remotes.get(p.peer);
       if (!r) continue;
-      r.tag && r.tag.remove(); this.remotes.delete(p.peer);
+      r.tag && r.tag.remove(); this.remotes.delete(p.peer); Voice.removePeer(p.peer);
       this.chatSys(`${r.name} left the ${this.server ? 'server' : 'party'}`);
-      if (r.host && !this.isHost && !this.server) this.hostGone();
+      if (r.host && !this.server) {
+        this.elect();
+        const h = this.isHost ? null : [...this.remotes.values()].sort((a, b) => a.j - b.j)[0];
+        if (h) this.chatSys(`${h.name} is now the host`);
+      }
     }
-    if (this.server) this.elect();
+    this.elect();
     UI.partyChanged();
   },
   ingest(p) {
@@ -253,7 +356,7 @@ const Net = {
     if (!r) {
       r = { peer: p.peer, name: 'Player', skin: Skins.presets[0].skin, pos: s.p.map(num), tpos: s.p.map(num), yaw: 0, tyaw: 0, pitch: 0, tpitch: 0,
         walk: 0, walkAmt: 0, swingT: 1, lastSwing: null, flags: 0, held: 0, lastE: 0, lastA: 0, lastC: 0, lastH: 0, host: false, tag: null,
-        j: 9e15, cw: true, hp: 20, hurtT: 0, score: [0, 0], lastPv: 0, lastDk: 0 };
+        j: 9e15, cw: true, hp: 20, hurtT: 0, score: [0, 0], lastPv: 0, lastDk: 0, snaps: [], off: undefined, jit: 0, lastTm: null, bubble: null, speaking: false, face: null };
       // first sight: apply the whole ring, but don't replay old chat, hits or deaths
       if (Array.isArray(s.c)) r.lastC = num(s.c[0]);
       if (Array.isArray(s.pv)) for (let i = 0; i + 4 < s.pv.length; i += 5) r.lastPv = Math.max(r.lastPv, num(s.pv[i]));
@@ -263,7 +366,12 @@ const Net = {
     }
     if (typeof s.j === 'number' && isFinite(s.j)) r.j = s.j;
     r.cw = s.cw !== 0;
-    if (typeof s.hp === 'number') { const hp = clamp(s.hp, 0, 20); if (hp < r.hp && hp > 0) r.hurtT = 0.35; r.hp = hp; }
+    if (typeof s.hp === 'number') {
+      const hp = clamp(s.hp, 0, 20);
+      if (hp < r.hp && hp > 0) { r.hurtT = 0.35; GameAudio.at(r.pos[0], r.pos[1] + 1, r.pos[2], () => GameAudio.hurt(), 24); }
+      r.hp = hp;
+    }
+    r.voice = s.vc === 1;
     if (Array.isArray(s.sc)) r.score = [clamp(num(s.sc[0]) | 0, 0, 99999), clamp(num(s.sc[1]) | 0, 0, 99999)];
     if (this.pvp && Array.isArray(s.pv)) {
       for (let i = 0; i + 4 < s.pv.length; i += 5) {
@@ -283,24 +391,41 @@ const Net = {
     r.armor = Array.isArray(s.ar) ? s.ar.slice(0, 4).map(v => clamp(v | 0, 0, 3)) : [0, 0, 0, 0];
     r.tpos = [num(s.p[0]), clamp(num(s.p[1]), -64, WH + 64), num(s.p[2])];
     if (Array.isArray(s.r)) { r.tyaw = num(s.r[0]); r.tpitch = clamp(num(s.r[1]), -1.6, 1.6); }
+    if (typeof s.tm === 'number' && isFinite(s.tm) && s.tm !== r.lastTm) {
+      const now = performance.now(), off = now - s.tm;
+      if (r.lastTm !== null && s.tm < r.lastTm) { r.snaps.length = 0; r.off = undefined; r.clock = undefined; } // their clock restarted (page reload)
+      r.lastTm = s.tm;
+      if (r.off === undefined || off < r.off) r.off = off; else r.off += (off - r.off) * 0.02; // slowly follow rising latency
+      r.jit = r.jit * 0.9 + Math.abs(off - r.off) * 0.1;
+      r.snaps.push({ t: s.tm, p: r.tpos.slice(), yaw: r.tyaw, pitch: r.tpitch });
+      if (r.snaps.length > 40) r.snaps.shift();
+      if (r.snaps.length === 1) { r.pos = r.tpos.slice(); r.yaw = r.tyaw; r.pitch = r.tpitch; }
+    }
     if (Array.isArray(s.st)) {
       r.flags = num(s.st[0]) | 0; r.held = ITEMS[num(s.st[2])] ? num(s.st[2]) : 0;
-      if (r.lastSwing !== null && s.st[1] !== r.lastSwing) r.swingT = 0;
+      if (r.lastSwing !== null && s.st[1] !== r.lastSwing) { r.swingT = 0; GameAudio.at(r.pos[0], r.pos[1] + 1.4, r.pos[2], () => GameAudio.swing(), 14); }
       r.lastSwing = s.st[1];
     }
     // block edits
     if (Array.isArray(s.e)) {
+      const audible = r.lastE > 0;
       let maxSeq = r.lastE;
       for (let i = 0; i + 4 < s.e.length; i += 5) {
         const sq = num(s.e[i]); if (sq <= r.lastE) continue;
         const x = num(s.e[i + 1]) | 0, y = num(s.e[i + 2]) | 0, z = num(s.e[i + 3]) | 0, id = num(s.e[i + 4]) | 0;
-        if (y >= 0 && y < WH && (id === 0 || BLOCKS[id])) this.applyEdit(x, y, z, id);
+        if (y >= 0 && y < WH && (id === 0 || BLOCKS[id])) this.applyEdit(x, y, z, id, audible);
         if (sq > maxSeq) maxSeq = sq;
       }
       r.lastE = maxSeq;
     }
     // chat
-    if (Array.isArray(s.c) && num(s.c[0]) > r.lastC) { r.lastC = num(s.c[0]); UI.chatLine(r.name, String(s.c[1] || '').slice(0, 120)); }
+    if (Array.isArray(s.c) && num(s.c[0]) > r.lastC) {
+      r.lastC = num(s.c[0]);
+      const text = String(s.c[1] || '').slice(0, 120), to = typeof s.c[2] === 'string' ? s.c[2] : null;
+      if (to) { if (to === this.me) { UI.chatLine(`${r.name} → you`, text, false, 'whisper'); GameAudio.pop(); } }
+      else if (text[0] === '*') UI.chatLine(null, `${r.name} ${text.slice(1)}`, false, 'emote');
+      else { UI.chatLine(r.name, text); r.bubble = { text, until: performance.now() + 6000 }; }
+    }
     // host processes attacks on its creatures
     if (this.isHost && Array.isArray(s.a)) {
       for (let i = 0; i + 4 < s.a.length; i += 5) {
@@ -332,11 +457,21 @@ const Net = {
       this.chatSys(`${r.name} was defeated by ${k ? k.name : 'another player'}`);
     } else this.chatSys(`${r.name} ${verbs[dk[2]] || 'perished'}`);
   },
-  applyEdit(x, y, z, id) {
+  applyEdit(x, y, z, id, audible) {
     const w = Game.world;
     if (this.pvp && Game.inSafeZone(x + 0.5, z + 0.5)) return;
     if (w.getBlock(x, y, z) === id && w.isLoaded(x, z)) return;
-    if (w.isLoaded(x, z)) { w.setBlock(x, y, z, id, true); if (id === 0) Game.checkSupport(x, y, z, true); }
+    if (w.isLoaded(x, z)) {
+      const prev = w.getBlock(x, y, z);
+      w.setBlock(x, y, z, id, true); if (id === 0) Game.checkSupport(x, y, z, true);
+      // you see and hear what other players build and break
+      if (audible && prev !== id) {
+        if (id === 0 && prev && FACE_TEX[prev]) {
+          GameAudio.at(x + 0.5, y + 0.5, z + 0.5, () => GameAudio.breakBlock(prev), 28);
+          Particles.burst(x + 0.5, y + 0.5, z + 0.5, FACE_TEX[prev][prev === B.GRASS ? 2 : 0], 16, {});
+        } else if (id && !prev) GameAudio.at(x + 0.5, y + 0.5, z + 0.5, () => GameAudio.place(id), 24);
+      }
+    }
     else {
       const k = ckey(x >> 4, z >> 4); let em = w.edits.get(k); if (!em) { em = new Map(); w.edits.set(k, em); }
       em.set((x & 15) | ((z & 15) << 4) | (y << 8), id); w.editVer++;
@@ -351,8 +486,11 @@ const Net = {
   },
   players() {
     // [{name, host, you}]
-    const list = [{ name: Profile.data ? Profile.data.name : 'You', host: this.isHost && !this.server, you: true, k: Game.score ? Game.score.k : 0, d: Game.score ? Game.score.d : 0 }];
-    for (const r of this.remotes.values()) list.push({ name: r.name, host: r.host && !this.server, you: false, k: r.score[0], d: r.score[1] });
+    const list = [{ name: Profile.data ? Profile.data.name : 'You', host: this.isHost && !this.server, you: true, k: Game.score ? Game.score.k : 0, d: Game.score ? Game.score.d : 0, skin: Profile.data && Profile.data.skin, voice: Voice.transmitting, speaking: Voice.talking, hp: Game.player ? Math.ceil(Game.player.health) : 20 }];
+    for (const r of this.remotes.values()) {
+      const inf = this.room && this.room.info ? this.room.info(r.peer) : null;
+      list.push({ name: r.name, host: r.host && !this.server, you: false, k: r.score[0], d: r.score[1], skin: r.skin, peer: r.peer, conn: inf, voice: r.voice, speaking: r.speaking, hp: r.hp });
+    }
     if (this.pvp) list.sort((a, b) => b.k - a.k || a.d - b.d);
     return list;
   },
@@ -377,8 +515,14 @@ const Net = {
     const vp = R.vp, W = innerWidth, H = innerHeight;
     for (const r of this.remotes.values()) {
       if (!r.tag) { r.tag = document.createElement('div'); r.tag.className = 'tag'; layer.appendChild(r.tag); }
-      const label = this.pvp ? `${r.name}  ❤ ${Math.ceil(r.hp / 2)}` : r.name;
-      if (r.tag.textContent !== label) r.tag.textContent = label;
+      const bub = r.bubble && r.bubble.until > performance.now() ? r.bubble.text : '';
+      const label = (r.speaking ? '🔊 ' : '') + (this.pvp ? `${r.name}  ❤ ${Math.ceil(r.hp / 2)}` : r.name);
+      const key = label + '|' + bub;
+      if (r.tagKey !== key) {
+        r.tagKey = key; r.tag.textContent = '';
+        if (bub) { const bb = document.createElement('div'); bb.className = 'bubble'; bb.textContent = bub; r.tag.appendChild(bb); }
+        const nn = document.createElement('div'); nn.className = 'nm' + (r.speaking ? ' talk' : ''); nn.textContent = label; r.tag.appendChild(nn);
+      }
       const x = r.pos[0], y = r.pos[1] + ((r.flags & 1) ? 1.9 : 2.1), z = r.pos[2];
       const cw = vp[3] * x + vp[7] * y + vp[11] * z + vp[15];
       const d = Math.hypot(x - cam.eye[0], y - cam.eye[1], z - cam.eye[2]);

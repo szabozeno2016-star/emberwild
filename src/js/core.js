@@ -8,6 +8,7 @@ const DAY_LEN = 600; // seconds for a full day/night cycle
 // ---------- small math ----------
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
+const lerpAngle = (a, b, t) => { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return a + d * t; };
 const smoothstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const mix3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 
@@ -320,7 +321,7 @@ const CREATIVE_START = [B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.OAK_PLANKS, B.OAK_
 // ---------- settings ----------
 const DEFAULT_SETTINGS = {
   renderDist: 8, fov: 75, sens: 100, invertY: false, master: 70, music: 45, sfx: 80, bobbing: true,
-  showFps: false, difficulty: 2, quality: 3, clouds: true, guiScale: 2, weather: true, particles: 1, ambient: 70, autoRes: true, graphics: 3, v: 2,
+  showFps: false, difficulty: 2, quality: 3, clouds: true, guiScale: 2, weather: true, particles: 1, ambient: 70, autoRes: true, graphics: 3, v: 2, voice: 0, voiceVol: 80,
 };
 const DIFFICULTY = ['Peaceful', 'Easy', 'Normal', 'Hard'];
 const QUALITY = ['50%', '70%', '85%', '100%', 'Sharp (HiDPI)', 'Ultra (supersampled)'];

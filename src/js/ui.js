@@ -196,13 +196,14 @@ const UI = {
       case 'mpHost': this.worldsHost = true; this.show('worlds'); break;
       case 'mpJoin': this.joinFromInput(); break;
       case 'wCreate': this.profileMode = 'create'; this.show('profile'); break;
-      case 'wGuest': Profile.guest(); this.refreshChip(); this.show('title'); this.toast(`Playing as ${Profile.data.name}`); break;
+      case 'wGuest': Profile.guest(); this.refreshChip(); this.show('title'); this.toast(`Playing as ${Profile.data.name}`); this.runInvite(); break;
       case 'profile': this.profileMode = 'edit'; this.show('profile'); break;
       case 'profSave': this.saveProfile(); break;
       case 'profCancel': if (this.profileMode === 'create' && !Profile.exists) this.show('welcome'); else this.back(); break;
       case 'profAlt': this.profileAlt(); break;
       case 'party': if (Net.active) this.leavePartyConfirm(); else Game.openParty().then(() => this.refreshPause()); break;
       case 'copyCode': this.copyCode(); break;
+      case 'copyLink': this.copyLink(); break;
       case 'settings': this.show('settings'); break;
       case 'credits': this.show('credits'); break;
       case 'help': this.show('help'); break;
@@ -296,6 +297,8 @@ const UI = {
     { k: 'music', label: 'Music', min: 0, max: 100, step: 1, fmt: v => v + '%' },
     { k: 'sfx', label: 'Sound effects', min: 0, max: 100, step: 1, fmt: v => v + '%' },
     { k: 'ambient', label: 'Ambience', min: 0, max: 100, step: 1, fmt: v => v + '%' },
+    { k: 'voice', label: 'Voice chat', cycle: ['Off', 'Open mic', 'Push to talk (V)'] },
+    { k: 'voiceVol', label: 'Voice volume', min: 0, max: 100, step: 1, fmt: v => v + '%' },
     { k: 'showFps', label: 'Show FPS', toggle: true },
     { sec: 'Gameplay' },
     { k: 'difficulty', label: 'Difficulty', cycle: DIFFICULTY },
@@ -356,6 +359,7 @@ const UI = {
     $('fpsBox').classList.toggle('hidden', !Settings.showFps || !!Game.debug);
     resize();
     if (typeof setAniso === 'function') setAniso(GFX.aniso);
+    if (typeof Voice !== 'undefined' && Net.active) Voice.apply();
     this.lastHearts = this.lastFood = ''; this.lastInvVer = -1; this.lastArmor = -1;
     $('musicBtn').style.opacity = Settings.music > 0 ? 1 : 0.45;
   },

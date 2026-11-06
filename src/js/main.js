@@ -69,7 +69,7 @@ function bindInput() {
     const inv = Game.inv;
     inv.sel = (inv.sel + (e.deltaY > 0 ? 1 : -1) + 9) % 9;
   }, { passive: true });
-  window.addEventListener('blur', () => { Input.keys = {}; Input.mouseL = Input.mouseR = false; });
+  window.addEventListener('blur', () => { Input.keys = {}; Input.mouseL = Input.mouseR = false; UI.showPlayers(false); Voice.setPTT(false); });
   window.addEventListener('keydown', e => {
     const code = e.code;
     if (e.target && e.target.tagName === 'INPUT') return;
@@ -84,6 +84,9 @@ function bindInput() {
       if (code.startsWith('Digit')) { const n = +code.slice(5); if (n >= 1 && n <= 9) Game.inv.sel = n - 1; }
       else if (code === 'KeyE') UI.openInventory();
       else if (code === 'KeyT' && Net.active) { e.preventDefault(); UI.openChat(); }
+      else if (code === 'Slash' && Net.active) { e.preventDefault(); UI.openChat('/'); }
+      else if (code === 'Tab' && Net.active) UI.showPlayers(true);
+      else if (code === 'KeyV' && Net.active) Voice.setPTT(true);
       else if (code === 'F5') { e.preventDefault(); Game.view = ((Game.view || 0) + 1) % 3; }
       else if (code === 'KeyQ') dropHeld(e.ctrlKey || e.metaKey);
       else if (code === 'F3') { Game.debug = !Game.debug; $('debug').classList.toggle('hidden', !Game.debug); $('fpsBox').classList.toggle('hidden', Game.debug || !Settings.showFps); }
@@ -103,7 +106,11 @@ function bindInput() {
       if (code === 'Escape' && UI.cur && UI.cur !== 'title') { GameAudio.click(); UI.show('title'); }
     }
   });
-  window.addEventListener('keyup', e => { Input.keys[e.code] = false; });
+  window.addEventListener('keyup', e => {
+    Input.keys[e.code] = false;
+    if (e.code === 'Tab') UI.showPlayers(false);
+    if (e.code === 'KeyV') Voice.setPTT(false);
+  });
   window.addEventListener('resize', resize);
   document.addEventListener('visibilitychange', () => { if (document.hidden && Game.state === 'play' && Game.worldId) Game.saveWorld(); });
   window.addEventListener('pagehide', () => { if (Game.state === 'play' && Game.worldId && !Saves.cloud) { try { Saves.save(Game.buildSave()); } catch (e) { } } });
@@ -158,11 +165,21 @@ function showError(msg) {
     $('profileChip').addEventListener('click', () => { GameAudio.init(); GameAudio.click(); UI.act('profile'); });
     $('joinCode').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') UI.act('mpJoin'); });
     $('pName').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') UI.act('profSave'); });
+    const readInvite = () => {
+      const m = /^#(party|server)=([A-Za-z0-9-]{3,40})$/.exec(location.hash || '');
+      if (!m) return false;
+      UI.pendingInvite = m[1] === 'party' ? { party: Net.norm(m[2]) } : { server: m[2].toLowerCase() };
+      return true;
+    };
+    window.addEventListener('hashchange', () => { if (readInvite() && Cloud.ready && Profile.exists) UI.runInvite(); });
+    readInvite();
     Cloud.init().then(() => Profile.load()).then(() => {
       if (!Cloud.canAccount) $('wCreateSub').textContent = 'Pick a name and skin for multiplayer. Your account and worlds are kept in this browser.';
       UI.refreshChip(); UI.refreshContinue();
       if (!Profile.exists && UI.cur === 'title') UI.show('welcome');
       else if (UI.cur === 'title') UI.show('title');
+      if (UI.pendingInvite && Profile.exists) UI.runInvite();
+      else if (UI.pendingInvite) $('wCreateSub').textContent = 'Pick a name and skin — then you’ll join your friend straight away.';
     });
     requestAnimationFrame(t => { lastT = t; loop(t); });
   };

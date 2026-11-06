@@ -127,7 +127,7 @@ function topicMatch(filter, topic) {
 }
 
 const Relay = {
-  conns: [], peer: null, subs: new Map(), seen: new Set(), seenQ: [], connectP: null, live: 0, downSince: 0, errHandlers: new Set(),
+  conns: [], peer: null, subs: new Map(), seen: new Set(), seenQ: [], connectP: null, live: 0, downSince: 0, errHandlers: new Set(), rooms: new Set(),
   get brokers() { return (typeof window !== 'undefined' && Array.isArray(window.__relayBrokers)) ? window.__relayBrokers : RELAY_BROKERS; },
   get connected() { return this.conns.some(c => c.ready); },
   ensure() {
@@ -152,7 +152,11 @@ const Relay = {
   connState(c, up) {
     if (up) {
       this.downSince = 0;
-      for (const f of this.subs.keys()) c.subscribe(f);
+      const back = c.everUp; c.everUp = true;
+      Promise.all([...this.subs.keys()].map(f => c.subscribe(f))).then(() => {
+        // after a dropped connection, say hello again so everyone re-sends their full state
+        if (back) for (const r of this.rooms) if (!r.left) r.send({ t: 'h', d: r.mine });
+      });
     } else {
       this.retry(c);
       if (!this.connected && !this.downSince) {
@@ -196,6 +200,72 @@ const Relay = {
   },
 };
 
+/* ---------- direct peer-to-peer links (WebRTC), signalled through the relay ---------- */
+const RTC_ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }, { urls: 'stun:stun.cloudflare.com:3478' }];
+class PeerLink {
+  constructor(room, peer, initiator) {
+    this.room = room; this.peer = peer; this.initiator = initiator; this.open = false; this.failed = false; this.rtt = 0; this.pendingC = []; this.audio = null;
+    const pc = this.pc = new RTCPeerConnection({ iceServers: RTC_ICE });
+    pc.onicecandidate = e => { if (e.candidate) room.signal(peer, { c: e.candidate.toJSON() }); };
+    pc.ontrack = e => { if (typeof Voice !== 'undefined') Voice.remoteTrack(peer, e.streams && e.streams[0] ? e.streams[0] : new MediaStream([e.track])); };
+    pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed' || pc.connectionState === 'closed') this.fail(); };
+    if (initiator) {
+      this.bind(pc.createDataChannel('g', { ordered: true }));
+      this.audio = pc.addTransceiver('audio', { direction: 'sendrecv' });
+      this.offer();
+    } else pc.ondatachannel = e => this.bind(e.channel);
+    this.timer = setTimeout(() => { if (!this.open) this.fail(); }, 16000);
+  }
+  async offer() {
+    try { await this.pc.setLocalDescription(await this.pc.createOffer()); this.room.signal(this.peer, { sdp: this.pc.localDescription.toJSON() }); }
+    catch (e) { this.fail(); }
+  }
+  async onSignal(d) {
+    if (this.failed) return;
+    const pc = this.pc;
+    try {
+      if (d.sdp && d.sdp.type) {
+        await pc.setRemoteDescription(d.sdp);
+        if (d.sdp.type === 'offer') {
+          const tr = pc.getTransceivers().find(t => t.receiver && t.receiver.track && t.receiver.track.kind === 'audio');
+          if (tr) { tr.direction = 'sendrecv'; this.audio = tr; }
+          await pc.setLocalDescription(await pc.createAnswer());
+          this.room.signal(this.peer, { sdp: pc.localDescription.toJSON() });
+        }
+        for (const c of this.pendingC.splice(0)) await pc.addIceCandidate(c).catch(() => { });
+      } else if (d.c) {
+        if (pc.remoteDescription) await pc.addIceCandidate(d.c).catch(() => { });
+        else this.pendingC.push(d.c);
+      }
+    } catch (e) { this.fail(); }
+  }
+  bind(dc) {
+    this.dc = dc;
+    dc.onopen = () => {
+      this.open = true; clearTimeout(this.timer);
+      this.pingT = setInterval(() => this.raw(JSON.stringify({ t: 'pi', ts: performance.now() })), 2000);
+      this.raw(JSON.stringify({ t: 'pi', ts: performance.now() }));
+      this.room.linkChanged(this);
+      if (typeof Voice !== 'undefined') Voice.attach(this);
+    };
+    dc.onmessage = e => {
+      const txt = typeof e.data === 'string' ? e.data : '';
+      if (txt.startsWith('{"t":"pi"')) { try { this.raw(JSON.stringify({ t: 'po', ts: JSON.parse(txt).ts })); } catch (x) { } return; }
+      if (txt.startsWith('{"t":"po"')) { try { const r = performance.now() - JSON.parse(txt).ts; this.rtt = this.rtt ? this.rtt * 0.7 + r * 0.3 : r; } catch (x) { } return; }
+      this.room.onMsg(null, txt);
+    };
+    dc.onclose = () => { if (this.open) { this.open = false; this.room.linkChanged(this); } };
+  }
+  raw(s) { if (this.open && this.dc && this.dc.readyState === 'open') { try { this.dc.send(s); return true; } catch (e) { } } return false; }
+  fail() {
+    if (this.failed) return;
+    this.failed = true; this.open = false; clearTimeout(this.timer); clearInterval(this.pingT);
+    try { this.pc.close(); } catch (e) { }
+    this.room.linkChanged(this);
+  }
+  close() { this.failed = true; this.open = false; clearTimeout(this.timer); clearInterval(this.pingT); try { this.dc && this.dc.close(); } catch (e) { } try { this.pc.close(); } catch (e) { } }
+}
+
 /* ---------- presence rooms (same shape as the claude.ai room API) ---------- */
 class RelayRoom {
   constructor(name) {
@@ -203,20 +273,48 @@ class RelayRoom {
     this.id = Relay.peer + '~' + Math.random().toString(36).slice(2, 8); // one id per visit, so rejoining starts clean
     this.mine = {}; this.others = new Map(); this.handlers = []; this.errs = []; this.seq = 0; this.left = false;
     this.onMsg = this.onMsg.bind(this); this.onWill = this.onWill.bind(this); this.onDown = e => this.errs.forEach(f => f(e));
+    this.links = new Map(); this.p2p = typeof RTCPeerConnection !== 'undefined';
+  }
+  /** connection details for the player list: direct link or relay, and round-trip time */
+  info(peer) {
+    const l = this.links.get(peer), p = this.others.get(peer);
+    if (l && l.open) return { direct: true, rtt: Math.round(l.rtt) };
+    return { direct: false, rtt: p && p.rtt ? Math.round(p.rtt) : 0, connecting: !!(l && !l.failed) };
+  }
+  get allDirect() { if (!this.others.size) return false; for (const p of this.others.keys()) { const l = this.links.get(p); if (!l || !l.open) return false; } return true; }
+  signal(to, d) { this.send({ t: 'sig', to, d }); }
+  ensureLink(peer) {
+    if (!this.p2p || this.left) return;
+    const l = this.links.get(peer);
+    if (l && !l.failed) return;
+    if (l && l.failed && Date.now() - (l.failedAt || (l.failedAt = Date.now())) < 45000) return; // wait before trying again
+    if (this.id < peer) this.links.set(peer, new PeerLink(this, peer, true));
+  }
+  linkChanged(l) {
+    if (l.failed) l.failedAt = Date.now();
+    if (typeof Net !== 'undefined' && Net.room === this) UI.partyChanged();
   }
   async start() {
     await Relay.subscribe(this.topic, this.onMsg);
     await Relay.subscribe(RELAY_PREFIX + 'will', this.onWill);
     Relay.errHandlers.add(this.onDown);
+    Relay.rooms.add(this);
     this.send({ t: 'h', d: this.mine });
-    this.kaT = setInterval(() => { this.send({ t: 'k' }); this.prune(); }, 4000);
+    this.kaT = setInterval(() => {
+      this.send({ t: 'k' }); this.prune();
+      // round-trip times for players we can only reach through the relay
+      for (const p of this.others.values()) { const l = this.links.get(p.peer); if (!l || !l.open) this.send({ t: 'pi', to: p.peer, ts: performance.now() }); this.ensureLink(p.peer); }
+    }, 4000);
     return this;
   }
   send(o) {
     o.f = this.id; o.s = ++this.seq;
     const s = JSON.stringify(o);
     if (s.length > RELAY_MAX) throw Object.assign(new Error('presence too large'), { code: 'invalid_argument' });
-    Relay.publish(this.topic, s, false);
+    // state updates go straight to players we have a direct link with; the relay carries the rest
+    let viaRelay = o.t !== 'p' || !this.others.size;
+    if (!viaRelay) for (const p of this.others.keys()) { const l = this.links.get(p); if (!l || !l.raw(s)) viaRelay = true; }
+    if (viaRelay) Relay.publish(this.topic, s, false);
   }
   me() { return { peer: this.id, isMe: true, sameTab: true, kind: 'viewer', guest: true, presence: Object.freeze(Object.assign({}, this.mine)), updatedAt: Date.now() }; }
   view(p) { return { peer: p.peer, isMe: false, sameTab: false, kind: 'viewer', guest: true, presence: Object.freeze(Object.assign({}, p.state)), updatedAt: p.seen }; }
@@ -247,11 +345,31 @@ class RelayRoom {
   }
   onMsg(topic, payload) {
     if (this.left) return;
-    let o; try { o = JSON.parse(new TextDecoder().decode(payload)); } catch (e) { return; }
+    let o; try { o = JSON.parse(typeof payload === 'string' ? payload : new TextDecoder().decode(payload)); } catch (e) { return; }
     if (!o || typeof o.f !== 'string' || o.f === this.id || typeof o.s !== 'number') return;
     if (!Relay.fresh(this.topic + o.f + ':' + o.s)) return;
+    if (o.t === 'sig') {
+      if (o.to !== this.id || !this.p2p || !o.d) return;
+      let l = this.links.get(o.f);
+      if (o.d.sdp && o.d.sdp.type === 'offer' && (!l || l.failed)) {
+        if (l) l.close();
+        l = new PeerLink(this, o.f, false); this.links.set(o.f, l);
+        const early = this.earlyC && this.earlyC.get(o.f); if (early) { l.pendingC.push(...early); this.earlyC.delete(o.f); }
+      }
+      if (l) l.onSignal(o.d);
+      else if (o.d.c) { // a candidate that overtook its offer on the other broker
+        if (!this.earlyC) this.earlyC = new Map();
+        const a = this.earlyC.get(o.f) || []; a.push(o.d.c); this.earlyC.set(o.f, a.slice(-30));
+      }
+      return;
+    }
+    if (o.t === 'pi') { if (o.to === this.id) this.send({ t: 'po', to: o.f, ts: o.ts }); return; }
+    if (o.t === 'po') {
+      if (o.to === this.id) { const q = this.others.get(o.f); if (q && typeof o.ts === 'number') { const r = performance.now() - o.ts; q.rtt = q.rtt ? q.rtt * 0.7 + r * 0.3 : r; } }
+      return;
+    }
     let p = this.others.get(o.f), joined = false;
-    if (o.t === 'b') { if (p) { this.others.delete(o.f); this.emit([], [p], []); } return; }
+    if (o.t === 'b') { if (p) { this.others.delete(o.f); this.dropLink(o.f); this.emit([], [p], []); } return; }
     if (!p) { p = { peer: o.f, state: {}, fs: {}, seen: Date.now() }; this.others.set(o.f, p); joined = true; }
     p.seen = Date.now();
     if (o.t === 'h' || o.t === 'f') this.apply(p, o.d, o.s, true);
@@ -260,25 +378,32 @@ class RelayRoom {
     if (o.t === 'h' || (joined && o.t !== 'f')) {
       clearTimeout(this.fullT); this.fullT = setTimeout(() => { if (!this.left) this.send({ t: 'f', d: this.mine }); }, 60 + Math.random() * 140);
     }
+    if (joined) this.ensureLink(o.f);
     if (o.t === 'k' && !joined) return;
     this.emit(joined ? [p] : [], [], joined ? [] : [p]);
+  }
+  dropLink(peer) {
+    const l = this.links.get(peer); if (l) { l.close(); this.links.delete(peer); }
+    if (typeof Voice !== 'undefined') Voice.removePeer(peer);
   }
   onWill(topic, payload) {
     let o; try { o = JSON.parse(new TextDecoder().decode(payload)); } catch (e) { return; }
     if (!o || typeof o.f !== 'string') return;
     const gone = [...this.others.values()].filter(p => p.peer.split('~')[0] === o.f);
-    gone.forEach(p => this.others.delete(p.peer));
+    gone.forEach(p => { this.others.delete(p.peer); this.dropLink(p.peer); });
     if (gone.length) this.emit([], gone, []);
   }
   prune() {
     const now = Date.now(), gone = [];
     for (const p of this.others.values()) if (now - p.seen > 15000) gone.push(p);
-    gone.forEach(p => this.others.delete(p.peer));
+    gone.forEach(p => { this.others.delete(p.peer); this.dropLink(p.peer); });
     if (gone.length) this.emit([], gone, []);
   }
   async leave() {
     if (this.left) return; this.left = true;
     clearInterval(this.kaT); clearTimeout(this.fullT);
+    Relay.rooms.delete(this);
+    for (const peer of [...this.links.keys()]) this.dropLink(peer);
     try { this.seq++; Relay.publish(this.topic, JSON.stringify({ t: 'b', f: this.id, s: this.seq }), false); } catch (e) { }
     Relay.unsubscribe(this.topic, this.onMsg); Relay.unsubscribe(RELAY_PREFIX + 'will', this.onWill);
     Relay.errHandlers.delete(this.onDown);
