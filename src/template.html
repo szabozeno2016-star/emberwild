@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Emberwild</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --gs:2; --slot:calc(var(--gs)*21px); --ember:#ffb347; --ember2:#ff7a2f; --ink:#f4ede3; --muted:#b9ab9a;
+  --panel:rgba(20,16,14,.88); --line:#0b0908;
+  --stone:none; --cobble:none; --planks:none; --dark:none;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#07060a;color:var(--ink);
+  font-family:'Pixelify Sans','Trebuchet MS',ui-monospace,monospace;user-select:none;-webkit-user-select:none}
+button{font-family:inherit}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block;outline:none}
+#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;transition:opacity .8s}
+.hidden{display:none!important}
+
+/* ---------- overlays ---------- */
+#menuShade{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity 1s;
+  background:radial-gradient(ellipse at 50% 42%,rgba(0,0,0,0) 30%,rgba(8,4,10,.55) 100%),
+  linear-gradient(180deg,rgba(10,6,18,.55) 0%,rgba(0,0,0,0) 30%,rgba(0,0,0,0) 62%,rgba(12,6,4,.7) 100%)}
+#menuShade.on{opacity:1}
+#hurt{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,rgba(255,0,0,0) 45%,rgba(190,0,0,.55) 100%);transition:opacity .45s}
+#vignette{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .8s;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(0,0,0,.38) 100%)}
+#vignette.on{opacity:1}
+#water{position:fixed;inset:0;pointer-events:none;opacity:0;background:rgba(20,70,160,.28);transition:opacity .2s}
+#fade{position:fixed;inset:0;background:#000;pointer-events:none;opacity:1;transition:opacity 1.1s ease}
+
+/* ---------- screens ---------- */
+.screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .35s ease;z-index:10}
+.screen.show{opacity:1;pointer-events:auto}
+.screen:not(.show),.screen:not(.show) *{pointer-events:none!important}
+.screen.dim{background:rgba(6,4,8,.55);backdrop-filter:blur(2px)}
+.screen.black{background:#0b0807}
+.screen .panel{transform:translateY(18px) scale(.98);transition:transform .4s cubic-bezier(.2,.9,.25,1.1)}
+.screen.show .panel{transform:none}
+
+.panel{position:relative;background:var(--panel);border:3px solid var(--line);padding:26px 30px;min-width:420px;max-width:92vw;max-height:90vh;overflow:auto;
+  box-shadow:inset 3px 3px 0 rgba(255,255,255,.07),inset -3px -3px 0 rgba(0,0,0,.5),0 18px 50px rgba(0,0,0,.6)}
+.panel::before{content:"";position:absolute;inset:0;background:var(--dark);background-size:96px;image-rendering:pixelated;opacity:.18;pointer-events:none}
+.panel > *{position:relative}
+.panel h2{margin:0 0 18px;font-size:30px;font-weight:700;text-align:center;letter-spacing:1px;
+  background:linear-gradient(180deg,#ffe2a8,#ff9a3c);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(2px 2px 0 #2a140a)}
+.panel p{color:var(--muted);line-height:1.45;font-size:16px;margin:8px 0}
+
+/* ---------- buttons ---------- */
+.btn{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;height:50px;padding:0 18px;
+  font-size:21px;font-weight:500;color:#f6f0e8;text-shadow:2px 2px 0 #2b2420;letter-spacing:.5px;cursor:pointer;
+  border:3px solid #0d0b0a;background:#6d6a66 var(--stone);background-size:64px;image-rendering:pixelated;
+  box-shadow:inset 3px 3px 0 rgba(255,255,255,.28),inset -3px -4px 0 rgba(0,0,0,.38),0 4px 0 rgba(0,0,0,.45);
+  transition:transform .12s ease,filter .15s ease,box-shadow .15s ease,border-color .15s;outline:none;white-space:nowrap}
+.menu-buttons .row .btn{font-size:19px;padding:0 10px}
+.btn::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(0,0,0,.25));pointer-events:none}
+.btn:hover,.btn:focus-visible{filter:brightness(1.14) saturate(1.05);border-color:#ffb347;transform:translateY(-2px);
+  box-shadow:inset 3px 3px 0 rgba(255,255,255,.32),inset -3px -4px 0 rgba(0,0,0,.38),0 6px 0 rgba(0,0,0,.45),0 0 22px rgba(255,150,50,.45)}
+.btn:active{transform:translateY(2px);filter:brightness(.95);box-shadow:inset 3px 4px 0 rgba(0,0,0,.35),inset -2px -2px 0 rgba(255,255,255,.12),0 1px 0 rgba(0,0,0,.45)}
+.btn.primary{background-color:#7b5a3a;background-image:var(--planks)}
+.btn:disabled{filter:grayscale(.7) brightness(.6);cursor:not-allowed;transform:none;border-color:#0d0b0a;box-shadow:inset 3px 3px 0 rgba(255,255,255,.12)}
+.btn.sq{width:50px;padding:0;font-size:22px}
+.btn .ic{font-size:18px;opacity:.9}
+.btn.ripple::before{content:"";position:absolute;left:var(--rx);top:var(--ry);width:8px;height:8px;margin:-4px;background:rgba(255,210,140,.6);animation:rip .45s ease-out forwards;pointer-events:none;z-index:1}
+@keyframes rip{to{transform:scale(40);opacity:0}}
+
+/* ---------- title ---------- */
+#sc-title{flex-direction:column;justify-content:flex-start}
+.title-wrap{display:flex;flex-direction:column;align-items:center;margin-top:max(5vh,24px);width:100%}
+#logo{width:min(780px,90vw);height:auto;image-rendering:pixelated;filter:drop-shadow(0 6px 0 rgba(0,0,0,.35)) drop-shadow(0 0 28px rgba(255,120,40,.35));animation:float 6s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0) rotate(-.4deg)}50%{transform:translateY(-8px) rotate(.4deg)}}
+.tagline{margin-top:6px;font-size:clamp(16px,2.2vw,24px);font-weight:600;letter-spacing:6px;color:#ffd18a;text-transform:uppercase;
+  text-shadow:2px 2px 0 #3a1a08,0 0 16px rgba(255,140,40,.7);animation:glow 3.2s ease-in-out infinite}
+@keyframes glow{50%{text-shadow:2px 2px 0 #3a1a08,0 0 26px rgba(255,170,60,.95)}}
+.menu-buttons{margin-top:clamp(18px,5vh,48px);display:flex;flex-direction:column;gap:12px;width:min(430px,88vw)}
+.menu-buttons .row{display:flex;gap:12px}
+.menu-buttons .row .btn:not(.sq){flex:1}
+.menu-buttons > .btn{opacity:0;transform:translateY(14px);animation:rise .6s cubic-bezier(.2,.9,.3,1.2) forwards}
+.menu-buttons > .btn:nth-child(1){animation-delay:.1s}.menu-buttons > .btn:nth-child(4){animation-delay:.4s}
+#continueBtn{font-weight:600}.menu-buttons > .btn:nth-child(2){animation-delay:.25s}.menu-buttons > .btn:nth-child(3){animation-delay:.35s}
+.menu-buttons > .row{opacity:0;animation:rise .6s .45s cubic-bezier(.2,.9,.3,1.2) forwards}
+@keyframes rise{to{opacity:1;transform:none}}
+.foot{position:fixed;bottom:12px;font-size:15px;color:rgba(255,240,220,.75);text-shadow:2px 2px 0 rgba(0,0,0,.6)}
+.foot.l{left:16px}.foot.r{right:16px}
+
+/* ---------- forms ---------- */
+.field{display:flex;flex-direction:column;gap:6px;margin:12px 0}
+.field label{font-size:15px;color:var(--muted);letter-spacing:.5px}
+.field input[type=text]{height:44px;background:#0d0b0a;border:3px solid #3b332d;color:var(--ink);font:inherit;font-size:19px;padding:0 12px;outline:none;
+  box-shadow:inset 3px 3px 0 rgba(0,0,0,.6)}
+.field input[type=text]:focus{border-color:var(--ember)}
+.hint{font-size:13px;color:#8d8172}
+.btnrow{display:flex;gap:12px;margin-top:18px}
+.btnrow .btn{flex:1}
+.seg{display:flex;gap:6px}
+.seg .btn{flex:1;height:42px;font-size:17px}
+.seg .btn.on{border-color:var(--ember);filter:brightness(1.18);box-shadow:inset 3px 3px 0 rgba(255,255,255,.3),inset -3px -4px 0 rgba(0,0,0,.38),0 0 14px rgba(255,150,50,.45)}
+
+/* ---------- settings ---------- */
+.setgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 26px;min-width:min(720px,86vw)}
+.set{display:flex;flex-direction:column;gap:6px;padding:8px 0}
+.set .lab{display:flex;justify-content:space-between;font-size:16px;color:#e9dccb}
+.set .lab b{color:var(--ember);font-weight:600}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:16px;background:#0d0b0a;border:3px solid #3b332d;outline:none;box-shadow:inset 2px 2px 0 rgba(0,0,0,.6)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:28px;background:#8a8580 var(--stone);background-size:48px;border:3px solid #0d0b0a;box-shadow:inset 2px 2px 0 rgba(255,255,255,.35),0 0 10px rgba(255,150,50,.5);cursor:pointer}
+input[type=range]::-moz-range-thumb{width:14px;height:24px;background:#8a8580;border:3px solid #0d0b0a;cursor:pointer}
+.set .btn{height:40px;font-size:17px}
+.set.wide{grid-column:1/-1}
+.gfxseg{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+.gfxseg .btn{height:42px;padding:0 4px;font-size:15px}
+.gfxseg .btn.on{border-color:var(--ember);filter:brightness(1.22);box-shadow:inset 3px 3px 0 rgba(255,255,255,.3),inset -3px -4px 0 rgba(0,0,0,.38),0 0 14px rgba(255,150,50,.5)}
+.gfxhint{font-size:14px;color:#bfa98f;min-height:18px}
+@media (max-width:640px){.gfxseg{grid-template-columns:repeat(3,1fr)}}
+.sechead{grid-column:1/-1;font-size:14px;letter-spacing:3px;text-transform:uppercase;color:#d8925a;margin-top:8px;border-bottom:2px solid rgba(255,160,80,.2);padding-bottom:4px}
+
+/* ---------- credits / help ---------- */
+.credits{height:min(56vh,440px);overflow:hidden;position:relative;width:min(560px,86vw);mask-image:linear-gradient(180deg,transparent,#000 14%,#000 86%,transparent)}
+.credits .roll{position:absolute;left:0;right:0;text-align:center;animation:roll 26s linear infinite}
+.credits h3{color:var(--ember);margin:28px 0 6px;font-size:18px;letter-spacing:2px;text-transform:uppercase}
+.credits div{font-size:18px;color:#efe4d6;line-height:1.5}
+@keyframes roll{from{transform:translateY(min(56vh,440px))}to{transform:translateY(-100%)}}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:8px 18px;font-size:17px;align-items:center}
+.keys kbd{font-family:inherit;background:#2a2420;border:2px solid #0b0908;box-shadow:inset 2px 2px 0 rgba(255,255,255,.15),0 2px 0 #000;padding:2px 8px;color:#ffe0b0;white-space:nowrap;justify-self:start}
+.keys span{color:#d9cbb9}
+
+/* ---------- loading ---------- */
+#sc-loading{flex-direction:column;gap:22px;background:radial-gradient(ellipse at center,#1d1410 0%,#090605 70%)}
+#sc-loading .lt{font-size:28px;color:#ffd9a0;text-shadow:2px 2px 0 #000}
+.bar{width:min(440px,80vw);height:22px;border:3px solid #0b0908;background:#1a1411;box-shadow:inset 2px 2px 0 rgba(0,0,0,.6)}
+.bar > div{height:100%;width:0;background:linear-gradient(90deg,#ff7a2f,#ffc56b);box-shadow:0 0 16px rgba(255,140,40,.6);transition:width .2s}
+#loadTip{color:#a89684;font-size:16px;max-width:80vw;text-align:center;min-height:22px}
+
+/* ---------- HUD ---------- */
+#hud{position:fixed;inset:0;pointer-events:none;z-index:5}
+#crosshair{position:absolute;left:50%;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;mix-blend-mode:difference}
+#crosshair::before,#crosshair::after{content:"";position:absolute;background:#fff}
+#crosshair::before{left:8px;top:0;width:2px;height:18px}
+#crosshair::after{left:0;top:8px;width:18px;height:2px}
+#hudBottom{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center}
+#bars{display:flex;justify-content:space-between;width:calc(var(--slot)*9 + 16px);margin-bottom:4px;align-items:flex-end}
+.icons{display:flex;gap:calc(var(--gs)*0.5px)}
+.icons.r{flex-direction:row-reverse}
+.ico{width:calc(var(--gs)*9px);height:calc(var(--gs)*9px);position:relative;image-rendering:pixelated}
+.ico i{position:absolute;inset:0;background-image:var(--atlas);background-size:calc(var(--gs)*16px*16) auto;image-rendering:pixelated}
+#hearts.low .ico{animation:shake .3s infinite}
+@keyframes shake{25%{transform:translateY(-1px)}75%{transform:translateY(1px)}}
+.rightcol{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+#hotbar{display:flex;padding:4px;background:rgba(10,8,7,.55);border:3px solid rgba(0,0,0,.75);box-shadow:inset 2px 2px 0 rgba(255,255,255,.08)}
+.slot{width:var(--slot);height:var(--slot);position:relative;background:rgba(60,52,46,.55);border:2px solid rgba(0,0,0,.5);
+  box-shadow:inset 2px 2px 0 rgba(0,0,0,.35),inset -2px -2px 0 rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center}
+.slot img{width:78%;height:78%;image-rendering:pixelated;pointer-events:none}
+.slot .n{position:absolute;right:2px;bottom:0;font-size:calc(var(--gs)*7.5px);font-weight:600;text-shadow:2px 2px 0 #000;pointer-events:none}
+.slot .dur{position:absolute;left:12%;right:12%;bottom:12%;height:3px;background:#000;pointer-events:none}
+.slot .dur i{display:block;height:100%}
+#hotbar .slot.sel{border-color:#ffc06a;box-shadow:inset 0 0 0 2px rgba(255,190,100,.6),0 0 14px rgba(255,150,50,.75);background:rgba(110,80,50,.55);z-index:1;transform:scale(1.08)}
+#hotbar .slot{transition:transform .1s}
+#hotbar .slot .key{position:absolute;left:3px;top:1px;font-size:11px;color:rgba(255,255,255,.35)}
+#itemName{height:26px;font-size:calc(var(--gs)*9px);color:#fff;text-shadow:2px 2px 0 #000;opacity:0;transition:opacity .4s;margin-bottom:4px}
+#eatBar{width:120px;height:6px;background:rgba(0,0,0,.6);margin-bottom:6px;opacity:0}
+#eatBar div{height:100%;width:0;background:#ffb347}
+  box-shadow:inset 2px 2px 0 rgba(255,255,255,.06);transition:opacity .3s, transform .3s}
+#debug{position:absolute;left:12px;top:12px;font-size:15px;line-height:1.35;text-align:left;color:#fff;text-shadow:2px 2px 0 #000;white-space:pre;font-family:ui-monospace,Menlo,Consolas,monospace}
+#fpsBox{position:absolute;right:12px;top:12px;font-size:14px;color:#fff;text-shadow:2px 2px 0 #000}
+#toasts{position:absolute;top:16px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
+.toast{padding:8px 16px;background:rgba(14,10,8,.82);border:3px solid #000;font-size:17px;color:#fff;animation:tin .3s ease-out,tout .5s 2.8s ease-in forwards;
+  box-shadow:inset 2px 2px 0 rgba(255,255,255,.07)}
+.toast.gold{color:#ffd480;border-color:#5a3410;box-shadow:0 0 16px rgba(255,150,50,.35)}
+@keyframes tin{from{opacity:0;transform:translateY(-10px)}}
+@keyframes tout{to{opacity:0;transform:translateY(-8px)}}
+#banner{position:absolute;top:22%;left:0;right:0;text-align:center;opacity:0;transition:opacity 1s}
+#banner.show{opacity:1}
+#banner .bt{font-size:clamp(34px,6vw,64px);font-weight:700;letter-spacing:3px;background:linear-gradient(180deg,#fff1cc,#ffad55);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(3px 3px 0 rgba(0,0,0,.7))}
+#banner .bs{font-size:20px;color:#f1e1cc;text-shadow:2px 2px 0 #000;margin-top:4px}
+#pickups{position:absolute;right:14px;bottom:110px;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.pk{display:flex;align-items:center;gap:8px;padding:3px 10px 3px 6px;background:rgba(10,8,7,.6);font-size:16px;animation:pkin .25s ease-out,tout .5s 2.2s forwards}
+.pk img{width:24px;height:24px;image-rendering:pixelated}
+@keyframes pkin{from{opacity:0;transform:translateX(16px)}}
+
+/* ---------- inventory ---------- */
+#sc-inv{background:rgba(6,4,8,.45)}
+.invwrap{display:flex;gap:18px;align-items:stretch;flex-wrap:wrap;justify-content:center;max-width:98vw;max-height:96vh;overflow:auto}
+.invwrap .panel{min-width:0;padding:18px 20px}
+.ptitle{font-size:16px;letter-spacing:3px;text-transform:uppercase;color:#e59a52;margin-bottom:10px;display:flex;justify-content:space-between;gap:10px}
+.grid9{display:grid;grid-template-columns:repeat(9,var(--slot));gap:3px}
+.grid9.hot{margin-top:12px;padding-top:12px;border-top:2px dashed rgba(255,255,255,.08)}
+.leftcol{display:flex;flex-direction:column;gap:2px}
+.invtop{display:flex;gap:14px;align-items:flex-start;margin-bottom:12px;max-width:calc(var(--slot)*9 + 30px)}
+.armorcol{display:flex;flex-direction:column;gap:3px}
+.armorcol .slot{background:rgba(30,26,24,.9)}
+.armorcol .slot .ph{width:70%;height:70%;opacity:.18;image-rendering:pixelated;filter:grayscale(1)}
+#invFig{width:64px;height:128px;image-rendering:pixelated;background:rgba(0,0,0,.25);border:2px solid rgba(0,0,0,.6);flex:none}
+#furnPanel{width:min(360px,92vw)}
+.furn{display:flex;align-items:center;justify-content:center;gap:18px;padding:10px 6px}
+.fcol{display:flex;flex-direction:column;align-items:center;gap:6px}
+.flame{width:14px;height:28px;background:#1a1411;border:2px solid #000;position:relative}
+.flame i{position:absolute;left:0;right:0;bottom:0;height:0;background:linear-gradient(0deg,#ff6a1f,#ffd36b);box-shadow:0 0 8px rgba(255,140,40,.8)}
+.farrow{width:64px;height:16px;background:#1a1411;border:2px solid #000;position:relative;clip-path:polygon(0 25%,72% 25%,72% 0,100% 50%,72% 100%,72% 75%,0 75%)}
+.farrow i{position:absolute;left:0;top:0;bottom:0;width:0;background:#f4ede3}
+#fOut .slot{width:calc(var(--slot)*1.3);height:calc(var(--slot)*1.3)}
+.fhint{font-size:13px;margin:4px 0 8px}
+#smeltList{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:13px;color:#cdbfae}
+#smeltList span{display:flex;align-items:center;gap:4px}#smeltList img{width:18px;height:18px;image-rendering:pixelated}
+#invStats{margin-top:0;flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-size:15px;color:#cdbfae}
+#invStats b{color:#ffd18a;font-weight:500}
+#invStats{grid-template-columns:1fr!important;gap:3px!important;font-size:14px}
+#invStats .full{grid-column:1/-1;color:#9c8c7b;font-size:13px;margin-top:6px;line-height:1.4}
+.inv .slot{pointer-events:auto;cursor:pointer;background:rgba(40,34,30,.85)}
+.inv .slot:hover{background:rgba(110,92,74,.85);border-color:rgba(255,190,110,.6)}
+#catalog{grid-template-columns:repeat(8,var(--slot));max-height:min(56vh,430px);overflow-y:auto;align-content:start;padding-right:4px}
+#catPanel .tabs .btn{font-size:13px;padding:0 6px}
+.inv .ptitle{max-width:calc(var(--slot)*9 + 30px);flex-wrap:wrap}
+#catPanel .ptitle{max-width:calc(var(--slot)*8 + 40px)}
+#catPanel .slot{background:rgba(52,44,38,.85)}
+#recipes{width:min(370px,40vw);max-height:min(56vh,430px);overflow-y:auto;display:flex;flex-direction:column;gap:5px;padding-right:4px}
+#recipes::-webkit-scrollbar{width:8px}#recipes::-webkit-scrollbar-thumb{background:#4a3d33}
+.rc{display:flex;align-items:center;gap:10px;padding:5px 8px;background:rgba(40,34,30,.75);border:2px solid rgba(0,0,0,.6);cursor:pointer;
+  transition:background .12s,border-color .12s,transform .1s;pointer-events:auto}
+.rc:hover{background:rgba(92,72,54,.85);border-color:#ffb347}
+.rc:active{transform:scale(.985)}
+.rc.no{opacity:.45;filter:grayscale(.5)}
+.rc.no:hover{border-color:rgba(0,0,0,.6)}
+.rc .out{width:40px;height:40px;position:relative;flex:none;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center}
+.rc .out img{width:32px;height:32px;image-rendering:pixelated}
+.rc .out b{position:absolute;right:1px;bottom:-2px;font-size:14px;text-shadow:2px 2px 0 #000}
+.rc .info{flex:1;min-width:0}
+.rc .nm{font-size:16px;color:#fff2df}
+.rc .ing{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
+.rc .ing span{display:flex;align-items:center;gap:2px;font-size:13px;color:#cdbfae}
+.rc .ing span.miss{color:#ff7a6a}
+.rc .ing img{width:18px;height:18px;image-rendering:pixelated}
+.rc .tag{font-size:11px;letter-spacing:1px;color:#ffb36b;border:1px solid rgba(255,170,90,.5);padding:1px 5px;white-space:nowrap}
+.rc .tag.lock{color:#ff8a7a;border-color:rgba(255,120,100,.5)}
+.tabs{display:flex;gap:4px;margin-bottom:8px}
+.tabs .btn{height:32px;font-size:14px;padding:0 10px;flex:1}
+.tabs .btn.on{border-color:var(--ember);filter:brightness(1.2)}
+#benchState{font-size:12px;letter-spacing:1px;text-transform:none}
+#benchState.ok{color:#9fe07a}#benchState.no{color:#a89684}
+#cursorStack{position:fixed;width:var(--slot);height:var(--slot);pointer-events:none;z-index:50;margin:calc(var(--slot)/-2) 0 0 calc(var(--slot)/-2);display:flex;align-items:center;justify-content:center}
+#cursorStack img{width:80%;height:80%;image-rendering:pixelated}
+#cursorStack .n{position:absolute;right:0;bottom:-2px;font-size:15px;font-weight:600;text-shadow:2px 2px 0 #000}
+#tooltip{position:fixed;z-index:60;pointer-events:none;padding:6px 10px;background:rgba(16,8,20,.94);border:2px solid #3b1f52;box-shadow:0 0 0 2px #000;max-width:260px;opacity:0;transition:opacity .1s}
+#tooltip .tn{font-size:16px;color:#fff}#tooltip .td{font-size:13px;color:#b8a8c8;margin-top:2px}
+
+/* ---------- death ---------- */
+#sc-death{flex-direction:column;background:radial-gradient(ellipse at center,rgba(90,0,0,.45),rgba(40,0,0,.82));gap:10px}
+#sc-death h1{font-size:clamp(40px,7vw,72px);margin:0;color:#fff;text-shadow:4px 4px 0 #3a0000,0 0 30px rgba(255,40,40,.6);letter-spacing:2px}
+#deathMsg{font-size:20px;color:#ffd6cc;margin-bottom:22px}
+#sc-death .btn{width:min(380px,80vw)}
+#sc-resume{flex-direction:column;background:rgba(0,0,0,.45);cursor:pointer}
+#sc-resume div{font-size:30px;color:#fff;text-shadow:3px 3px 0 #000;animation:glow 2s infinite}
+#sc-resume small{font-size:16px;color:#cbbba8;margin-top:8px}
+#sc-pause .panel{min-width:min(420px,90vw);display:flex;flex-direction:column;gap:10px}
+#sc-quit{flex-direction:column;gap:18px}
+#sc-quit .q1{font-size:clamp(26px,4vw,40px);color:#ffd9a0;text-shadow:3px 3px 0 #000}
+#sc-quit .q2{color:#9c8c7b;font-size:17px;max-width:520px;text-align:center}
+/* ---------- profile / accounts ---------- */
+#profileChip{position:fixed;left:14px;top:14px;z-index:11;display:flex;align-items:center;gap:10px;padding:6px 14px 6px 6px;cursor:pointer;
+  background:rgba(14,10,8,.7);border:3px solid #0b0908;box-shadow:inset 2px 2px 0 rgba(255,255,255,.08);transition:transform .12s,border-color .15s}
+#profileChip:hover{border-color:var(--ember);transform:translateY(-2px)}
+#profileChip canvas{width:36px;height:36px;image-rendering:pixelated;border:2px solid #000}
+#profileChip b{display:block;font-size:17px;font-weight:600}
+#profileChip span{font-size:12px;color:#c9a780;letter-spacing:1px;text-transform:uppercase}
+.choices{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px}
+.choice{display:flex;flex-direction:column;align-items:flex-start;gap:6px;height:auto;padding:16px 18px;text-align:left;white-space:normal}
+.choice b{font-size:22px}.choice small{font-size:14px;color:#efe2cf;font-weight:400;line-height:1.35;text-shadow:1px 1px 0 #000}
+#sc-profile{justify-content:flex-start;padding-left:max(3vw,16px)}
+.profpanel{width:min(620px,94vw);display:grid;grid-template-columns:auto 1fr;gap:6px 22px}
+.profpanel h2,.profpanel #profStatus,.profpanel .btnrow{grid-column:1/-1}
+#skinFig{width:96px;height:192px;image-rendering:pixelated;background:rgba(0,0,0,.25);border:3px solid #0b0908;grid-row:span 2}
+#presetGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.preset{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;background:rgba(40,34,30,.8);border:2px solid rgba(0,0,0,.6);cursor:pointer;font-size:12px;color:#e9dccb;transition:border-color .12s,transform .1s}
+.preset:hover{border-color:#ffb347;transform:translateY(-2px)}.preset.on{border-color:#ffc06a;box-shadow:0 0 12px rgba(255,150,50,.5)}
+.preset canvas{width:32px;height:64px;image-rendering:pixelated}
+#skinCustom{grid-column:1/-1;display:grid;grid-template-columns:110px 1fr;gap:6px 10px;align-items:center;margin-top:6px}
+#skinCustom label{font-size:14px;color:#cdbfae}
+.sw{display:flex;flex-wrap:wrap;gap:5px}
+.sw i{width:22px;height:22px;border:2px solid #0b0908;cursor:pointer;box-shadow:inset 2px 2px 0 rgba(255,255,255,.2);transition:transform .1s}
+.sw i:hover{transform:scale(1.15)}.sw i.on{outline:3px solid #ffc06a;outline-offset:1px}
+.sw button{height:28px;font-size:13px;padding:0 8px}.sw button.on{border-color:var(--ember);filter:brightness(1.2)}
+#worldList{display:flex;flex-direction:column;gap:8px;max-height:min(50vh,420px);overflow:auto;min-width:min(520px,86vw);padding-right:4px}
+.wrow{display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(40,34,30,.8);border:2px solid rgba(0,0,0,.6)}
+.wrow .wi{flex:1;min-width:0}.wrow .wn{font-size:19px;color:#fff2df;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wrow .wd{font-size:13px;color:#a89684}
+.wrow .btn{height:38px;font-size:16px}
+.empty{color:#9c8c7b;text-align:center;padding:20px}
+/* ---------- servers ---------- */
+#srvList{display:flex;flex-direction:column;gap:8px;max-height:min(52vh,430px);overflow:auto;min-width:min(600px,88vw);padding-right:4px}
+.srow{display:flex;align-items:center;gap:14px;padding:10px 12px;background:rgba(40,34,30,.8);border:2px solid rgba(0,0,0,.6)}
+.srow.official{border-color:rgba(255,150,60,.6);background:linear-gradient(90deg,rgba(110,40,16,.75),rgba(40,34,30,.8) 70%)}
+.srow .sic{width:52px;height:52px;flex:none;display:grid;place-items:center;background:rgba(0,0,0,.4);border:2px solid rgba(0,0,0,.5)}
+.srow .sic img{width:36px;height:36px;image-rendering:pixelated}
+.srow .si{flex:1;min-width:0}
+.srow .sn{font-size:21px;color:#fff2df;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.badge{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;padding:1px 6px;border:1px solid currentColor;line-height:16px}
+.badge.off{color:#ffc46b}.badge.pvp{color:#ff7d5e}.badge.survival{color:#9fd86e}.badge.creative{color:#86c8ff}
+.srow .sd{font-size:14px;color:#cdbfae;margin-top:2px}
+.srow .so{font-size:13px;color:#9a8b7a;margin-top:3px}.srow .so .live{color:#8fe27b}
+.srow .btn{height:40px;font-size:16px;flex:none;padding:0 16px}
+#srvStatus{min-height:20px;text-align:center;color:#ffcf8a;margin-top:8px}
+#srvNote{font-size:13px;color:#9c8c7b;text-align:center;margin:8px 0 0}
+#sMode{display:grid;grid-template-columns:repeat(3,1fr)}
+#sc-newserver .field{margin:8px 0}#sc-newserver h2{margin-bottom:6px}
+#zoneTag{position:absolute;left:50%;top:14px;transform:translateX(-50%);padding:3px 12px;background:rgba(30,80,40,.7);border:2px solid rgba(140,230,140,.55);color:#d8ffd0;font-size:14px;letter-spacing:2px;text-transform:uppercase}
+.mpgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:6px}
+.mpcard{background:rgba(40,34,30,.6);border:2px solid rgba(0,0,0,.6);padding:14px;display:flex;flex-direction:column;gap:10px}
+.mpcard h3{margin:0;font-size:18px;color:#ffd18a;font-weight:600}
+#joinCode{text-transform:uppercase;letter-spacing:6px;text-align:center;font-size:24px!important}
+#mpStatus{min-height:22px;color:#ffcf9a;text-align:center;margin-top:10px}
+#partyInfo{text-align:center;padding:8px;border:2px dashed rgba(255,180,90,.35);display:none}
+#partyInfo .code{font-size:30px;letter-spacing:6px;color:#ffd18a;font-weight:700}
+/* ---------- multiplayer HUD ---------- */
+#tags{position:fixed;inset:0;pointer-events:none;z-index:4;overflow:hidden}
+.tag{position:absolute;left:0;top:0;padding:2px 8px;background:rgba(0,0,0,.5);color:#fff;font-size:15px;white-space:nowrap;text-shadow:1px 1px 0 #000}
+#partyBox{position:absolute;right:12px;top:12px;padding:8px 12px;background:rgba(14,10,8,.62);border:3px solid rgba(0,0,0,.6);min-width:150px}
+#partyBox .pt{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#e59a52}
+#partyBox .pt b{color:#ffd18a;letter-spacing:3px}
+#partyList div{font-size:15px;margin-top:2px}
+#partyList .you{color:#ffd18a}
+#chat{position:absolute;left:12px;bottom:120px;width:min(440px,60vw);display:flex;flex-direction:column;gap:3px;pointer-events:none}
+#chatLog{display:flex;flex-direction:column;gap:2px}
+.cl{background:rgba(0,0,0,.45);padding:2px 8px;font-size:16px;color:#fff;text-shadow:1px 1px 0 #000;transition:opacity 1s}
+.cl b{color:#ffd18a;font-weight:600}.cl.sys{color:#f3c98b;font-style:italic}.cl.fade{opacity:0}
+#chatInput{pointer-events:auto;height:36px;background:rgba(0,0,0,.75);border:2px solid var(--ember);color:#fff;font:inherit;font-size:16px;padding:0 10px;outline:none}
+#saveNote{position:fixed;right:14px;bottom:12px;z-index:6;font-size:14px;color:#e8dccb;text-shadow:1px 1px 0 #000;opacity:0;transition:opacity .4s}
+#err{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:100;background:#0b0807;color:#ffd9a0;font-size:20px;padding:30px;text-align:center}
+</style>
+</head>
+<body>
+<canvas id="gl" tabindex="0"></canvas>
+<div id="menuShade"></div>
+<canvas id="fx"></canvas>
+<div id="water"></div>
+<div id="vignette"></div>
+<div id="hurt"></div>
+<div id="tags"></div>
+<div id="profileChip" class="hidden" title="Profile &amp; skin"><canvas id="chipFace" width="32" height="32"></canvas><div><b id="chipName"></b><span id="chipKind"></span></div></div>
+<div id="saveNote"></div>
+
+<div id="hud" class="hidden">
+  <div id="crosshair"></div>
+  <div id="debug" class="hidden"></div>
+  <div id="fpsBox" class="hidden"></div>
+  <div id="toasts"></div>
+  <div id="banner"><div class="bt"></div><div class="bs"></div></div>
+  <div id="pickups"></div>
+  <div id="partyBox" class="hidden"><div class="pt"><span id="partyLabel">Party</span> <b id="partyCode"></b></div><div id="partyList"></div></div>
+  <div id="zoneTag" class="hidden">Safe zone</div>
+  <div id="chat"><div id="chatLog"></div><input id="chatInput" class="hidden" maxlength="120" placeholder="Say something… Enter to send, Esc to cancel" autocomplete="off"></div>
+  <div id="hudBottom">
+    <div id="itemName"></div>
+    <div id="eatBar"><div></div></div>
+    <div id="bars"><div class="leftcol"><div class="icons" id="armorRow"></div><div class="icons" id="hearts"></div></div><div class="rightcol"><div class="icons r" id="bubbles"></div><div class="icons r" id="food"></div></div></div>
+    <div id="hotbar"></div>
+  </div>
+</div>
+
+<!-- title -->
+<div id="sc-title" class="screen">
+  <div class="title-wrap">
+    <canvas id="logo"></canvas>
+    <div class="tagline">Explore · Build · Endure</div>
+    <div class="menu-buttons">
+      <button class="btn primary hidden" data-act="continue" id="continueBtn">Continue</button>
+      <button class="btn" data-act="single">Singleplayer</button>
+      <button class="btn" data-act="multi">Multiplayer</button>
+      <button class="btn" data-act="servers">Servers</button>
+      <button class="btn" data-act="settings">Settings</button>
+      <div class="row">
+        <button class="btn sq" data-act="help" title="How to play">?</button>
+        <button class="btn" data-act="credits">Credits</button>
+        <button class="btn" data-act="quit">Quit Game</button>
+        <button class="btn sq" data-act="music" title="Music on / off" id="musicBtn">♪</button>
+      </div>
+    </div>
+  </div>
+  <div class="foot l">Emberwild · v1.1</div>
+  <div class="foot r">Endless worlds · Survival &amp; Creative</div>
+</div>
+
+<!-- new world -->
+<div id="sc-new" class="screen dim">
+  <div class="panel" style="width:min(480px,92vw)">
+    <h2>Create New World</h2>
+    <div class="field"><label>World name</label><input type="text" id="wName" maxlength="32" value="New World"></div>
+    <div class="field"><label>Seed</label><input type="text" id="wSeed" maxlength="40" placeholder="Leave blank for a random world"><span class="hint">Same seed, same world. Try words like “ember” or “cozy”.</span></div>
+    <div class="field"><label>Game mode</label><div class="seg" id="wMode"></div></div>
+    <p id="modeDesc" style="min-height:44px"></p>
+    <div class="field" id="diffField"><label>Difficulty</label><div class="seg" id="wDiff"></div></div>
+    <p id="diffDesc" style="min-height:44px"></p>
+    <div class="btnrow"><button class="btn" data-act="back">Cancel</button><button class="btn primary" data-act="create">Create World</button></div>
+  </div>
+</div>
+
+<!-- settings -->
+<div id="sc-settings" class="screen dim">
+  <div class="panel"><h2>Settings</h2><div class="setgrid" id="setGrid"></div>
+    <div class="btnrow"><button class="btn" data-act="resetSettings">Reset to defaults</button><button class="btn primary" data-act="back">Done</button></div>
+  </div>
+</div>
+
+<!-- credits -->
+<div id="sc-credits" class="screen dim">
+  <div class="panel" style="padding-bottom:20px"><h2>Credits</h2>
+    <div class="credits"><div class="roll">
+      <h3>Emberwild</h3><div>An original voxel survival sandbox</div>
+      <h3>Game Design &amp; Programming</h3><div>Built with Claude, from the player’s brief</div>
+      <h3>Texture Pack</h3><div>Supplied by the player</div><div>Leaves, water, flowers, tools &amp; creatures<br>drawn to match the pack</div>
+      <h3>Engine</h3><div>Custom WebGL2 voxel renderer<br>Smooth lighting · Ambient occlusion<br>Procedural terrain &amp; skies</div>
+      <h3>Audio</h3><div>Every sound and note is synthesized live<br>in your browser — no recordings</div>
+      <h3>Creatures</h3><div>The Gloomlings, who would rather you didn’t</div>
+      <h3>Special Thanks</h3><div>Everyone who has ever punched a tree<br>to see what would happen</div>
+      <h3>&nbsp;</h3><div>Thanks for playing.</div>
+    </div></div>
+    <div class="btnrow"><button class="btn primary" data-act="back">Back</button></div>
+  </div>
+</div>
+
+<!-- multiplayer -->
+<div id="sc-multi" class="screen dim">
+  <div class="panel" style="width:min(640px,94vw)"><h2>Multiplayer</h2>
+    <div id="mpOff" class="hidden"><p>Multiplayer needs the live connection that claude.ai gives this game. Open it from its claude.ai link while signed in, then try again.</p></div>
+    <div id="mpOn">
+      <div class="mpgrid">
+        <div class="mpcard"><h3>Host a party</h3><p style="margin:0">Pick one of your worlds. You’ll get a 6-character code to give your friends.</p><button class="btn primary" data-act="mpHost">Choose a world</button></div>
+        <div class="mpcard"><h3>Join a party</h3><input type="text" id="joinCode" maxlength="7" placeholder="ABC-123" autocomplete="off"><button class="btn primary" data-act="mpJoin">Join</button></div>
+      </div>
+      <div id="mpStatus"></div>
+      <p style="font-size:14px">Friends need access to this game: share it from the Share menu. People shared as Contributor or Editor can save their account and worlds online; Viewers can still join parties.</p>
+    </div>
+    <div class="btnrow"><button class="btn" data-act="back">Back</button></div>
+  </div>
+</div>
+
+<!-- servers -->
+<div id="sc-servers" class="screen dim">
+  <div class="panel" style="width:min(720px,95vw)"><h2>Servers</h2>
+    <div id="srvOff" class="hidden"><p>Servers need the live connection that claude.ai gives this game. Open it from its claude.ai link while signed in, then try again.</p></div>
+    <div id="srvOn">
+      <div id="srvList"></div>
+      <div id="srvStatus"></div>
+      <p id="srvNote"></p>
+    </div>
+    <div class="btnrow"><button class="btn" data-act="toTitle">Back</button><button class="btn" data-act="srvRefresh">Refresh</button><button class="btn primary" data-act="srvCreate" id="srvCreateBtn">Create Server</button></div>
+  </div>
+</div>
+<div id="sc-newserver" class="screen dim">
+  <div class="panel" style="width:min(500px,92vw)"><h2>Create Server</h2>
+    <div class="field"><label>Server name</label><input type="text" id="sName" maxlength="24" placeholder="My Server" autocomplete="off"></div>
+    <div class="field"><label>Description</label><input type="text" id="sDesc" maxlength="90" placeholder="What’s it about? (optional)" autocomplete="off"></div>
+    <div class="field"><label>Game mode</label><div class="seg" id="sMode"></div></div>
+    <p id="sModeDesc" style="min-height:40px;margin:2px 0;font-size:15px"></p>
+    <div class="field"><label>World seed</label><input type="text" id="sSeed" maxlength="40" placeholder="Leave blank for a random world" autocomplete="off"></div>
+    <p class="hint" style="margin:0">Listed for everyone with this game, and open to join even when you’re away.</p>
+    <div id="sStatus" style="min-height:20px;color:#ffcf8a;margin-top:8px;text-align:center"></div>
+    <div class="btnrow"><button class="btn" data-act="servers">Cancel</button><button class="btn primary" data-act="srvMake" id="srvMakeBtn">Create Server</button></div>
+  </div>
+</div>
+
+<!-- welcome -->
+<div id="sc-welcome" class="screen dim">
+  <div class="panel" style="width:min(640px,94vw)"><h2>Welcome to Emberwild</h2>
+    <p style="text-align:center">How would you like to play?</p>
+    <div class="choices">
+      <button class="btn choice primary" data-act="wCreate"><b>Create Account</b><small id="wCreateSub">Pick a name and skin. Your worlds are saved to your account and follow you to any device.</small></button>
+      <button class="btn choice" data-act="wGuest"><b>Play as Guest</b><small>Stay anonymous. A random name, nothing linked to you. Worlds stay in this browser.</small></button>
+    </div>
+  </div>
+</div>
+
+<!-- profile & skin -->
+<div id="sc-profile" class="screen">
+  <div class="panel profpanel">
+    <h2 id="profTitle">Your Profile</h2>
+    <p id="profStatus" style="margin-top:-8px"></p>
+    <canvas id="skinFig" width="64" height="128"></canvas>
+    <div class="field" style="margin:0"><label>Player name</label><input type="text" id="pName" maxlength="16" autocomplete="off"></div>
+    <div><label style="font-size:15px;color:var(--muted)">Skins</label><div id="presetGrid"></div></div>
+    <div id="skinCustom"></div>
+    <div class="btnrow"><button class="btn" id="profAlt" data-act="profAlt">Switch to Guest</button><button class="btn" data-act="profCancel">Cancel</button><button class="btn primary" data-act="profSave">Save</button></div>
+  </div>
+</div>
+
+<!-- world list -->
+<div id="sc-worlds" class="screen dim">
+  <div class="panel"><h2 id="worldsTitle">Select World</h2>
+    <p id="worldsNote" style="text-align:center;margin-top:-8px"></p>
+    <div id="worldList"></div>
+    <div class="btnrow"><button class="btn" data-act="back">Back</button><button class="btn primary" data-act="newWorld">Create New World</button></div>
+  </div>
+</div>
+
+<!-- help -->
+<div id="sc-help" class="screen dim">
+  <div class="panel"><h2>How to Play</h2>
+    <div class="keys">
+      <kbd>W A S D</kbd><span>Move</span>
+      <kbd>Mouse</kbd><span>Look around (arrow keys also work)</span>
+      <kbd>Space</kbd><span>Jump / swim up</span>
+      <kbd>Space ×2</kbd><span>Creative: toggle flying (Space up, Shift down)</span>
+      <kbd>Ctrl</kbd><span>Sprint (or double-tap W)</span>
+      <kbd>Shift</kbd><span>Sneak — won’t walk off edges</span>
+      <kbd>Left click</kbd><span>Hold to mine · click to attack</span>
+      <kbd>Right click</kbd><span>Place block · eat food · use workbench</span>
+      <kbd>1–9 / Wheel</kbd><span>Select hotbar slot</span>
+      <kbd>E</kbd><span>Inventory &amp; crafting</span>
+      <kbd>Q</kbd><span>Drop item (Ctrl+Q drops the stack)</span>
+      <kbd>Middle click</kbd><span>Pick the block you’re looking at</span>
+      <kbd>F5</kbd><span>Switch camera: first person, behind, in front</span>
+      <kbd>Right click</kbd><span>On a furnace: smelt · on a bed: sleep · with armour: equip</span>
+      <kbd>T</kbd><span>Chat (in a party)</span>
+      <kbd>F1 · F3</kbd><span>Hide HUD · debug info</span>
+      <kbd>Esc</kbd><span>Pause</span>
+    </div>
+    <p style="margin-top:16px">The world is endless: walk in any direction and new land keeps generating. In Creative you have every block, can fly and break anything instantly. In Survival, keep your hunger up with apples and wild berries, light torches before nightfall, and watch your step — long falls hurt.</p>
+    <div class="btnrow"><button class="btn primary" data-act="back">Back</button></div>
+  </div>
+</div>
+
+<!-- quit -->
+<div id="sc-quit" class="screen black">
+  <div class="q1">Thanks for playing Emberwild</div>
+  <div class="q2">You can close this tab whenever you like. Your settings are remembered.</div>
+  <button class="btn" style="width:320px" data-act="toTitle">Return to Title</button>
+</div>
+
+<!-- loading -->
+<div id="sc-loading" class="screen black">
+  <div class="lt" id="loadTitle">Generating world…</div>
+  <div class="bar"><div id="loadBar"></div></div>
+  <div id="loadTip"></div>
+</div>
+
+<!-- pause -->
+<div id="sc-pause" class="screen dim">
+  <div class="panel"><h2>Game Paused</h2>
+    <button class="btn primary" data-act="resume">Back to Game</button>
+    <button class="btn" data-act="settings">Settings</button>
+    <div id="partyInfo"><div style="font-size:13px;color:#cdbfae" id="partyInfoLabel">PARTY CODE</div><div class="code" id="partyCodeBig"></div><button class="btn" data-act="copyCode" id="copyCodeBtn" style="height:36px;font-size:15px;margin:6px auto 0;width:200px">Copy code</button></div>
+    <button class="btn" data-act="party" id="partyBtn">Open to Party</button>
+    <button class="btn" data-act="toggleMode" id="modeBtn">Game Mode: Survival</button>
+    <button class="btn" data-act="profile">Profile &amp; Skin</button>
+    <button class="btn" data-act="help">How to Play</button>
+    <button class="btn" data-act="quitWorld" id="quitBtn">Save &amp; Quit to Title</button>
+    <p id="pauseInfo" style="text-align:center;font-size:14px;margin-top:10px"></p>
+  </div>
+</div>
+
+<!-- inventory -->
+<div id="sc-inv" class="screen">
+  <div class="invwrap">
+    <div class="panel inv">
+      <div class="ptitle"><span>Inventory</span><span id="invHint" style="text-transform:none;letter-spacing:0;color:#9c8c7b;font-size:12px">Shift-click to move · right-click splits</span></div>
+      <div class="invtop"><div class="armorcol" id="armorSlots"></div><canvas id="invFig" width="64" height="128"></canvas><div id="invStats"></div></div>
+      <div class="grid9" id="invMain"></div>
+      <div class="grid9 hot" id="invHot"></div>
+    </div>
+    <div class="panel" id="craftPanel">
+      <div class="ptitle"><span>Crafting</span><span id="benchState"></span></div>
+      <div class="tabs" id="tabs"></div>
+      <div id="recipes"></div>
+    </div>
+    <div class="panel inv" id="furnPanel">
+      <div class="ptitle"><span>Furnace</span><span id="furnState" style="text-transform:none;letter-spacing:0;font-size:12px"></span></div>
+      <div class="furn">
+        <div class="fcol"><div id="fIn"></div><div class="flame"><i id="flameFill"></i></div><div id="fFuel"></div></div>
+        <div class="farrow"><i id="arrowFill"></i></div>
+        <div id="fOut"></div>
+      </div>
+      <p class="fhint">Top slot: what to smelt. Bottom slot: fuel — coal, charcoal or wood.</p>
+      <div id="smeltList"></div>
+    </div>
+    <div class="panel inv" id="catPanel">
+      <div class="ptitle"><span>All Blocks &amp; Items</span><span style="text-transform:none;letter-spacing:0;color:#9c8c7b;font-size:12px">Click to take a stack · drop here to delete</span></div>
+      <div class="tabs" id="catTabs"></div>
+      <div class="grid9" id="catalog"></div>
+    </div>
+  </div>
+</div>
+
+<!-- death -->
+<div id="sc-death" class="screen">
+  <h1>You Perished</h1>
+  <div id="deathMsg"></div>
+  <button class="btn primary" data-act="respawn">Respawn</button>
+  <button class="btn" data-act="quitWorld">Title Screen</button>
+</div>
+
+<!-- click to resume -->
+<div id="sc-resume" class="screen"><div>Click to play</div><small>Mouse look needs the pointer captured · Esc to pause</small></div>
+
+<!-- confirm -->
+<div id="sc-confirm" class="screen dim">
+  <div class="panel" style="width:min(480px,92vw)"><h2 id="cfTitle"></h2><p id="cfText"></p>
+    <div class="btnrow"><button class="btn" id="cfNo">Cancel</button><button class="btn primary" id="cfYes">OK</button></div>
+  </div>
+</div>
+
+<div id="cursorStack" class="hidden"></div>
+<div id="tooltip"><div class="tn"></div><div class="td"></div></div>
+<div id="fade"></div>
+
+<script>
+__SCRIPTS__
+</script>
+</body>
+</html>
