@@ -45,8 +45,9 @@ Endless procedurally generated worlds, survival and creative modes, crafting, sm
 
 The whole game is a single file — **`index.html`**. Open it in any modern browser with WebGL2 (Chrome, Edge, Brave, Firefox, Safari 15+), or use the GitHub Pages link above.
 
-On GitHub Pages or from a local file the game runs in **single-player**, and worlds are saved in your browser.
-Online accounts, multiplayer parties and servers use the live connection that claude.ai provides, so they work when the game is opened from its claude.ai link.
+**Multiplayer works everywhere.** On GitHub Pages (or any website) parties and servers connect through free public MQTT relays — two at once, so one going down doesn't stop the game. When the game is opened from its claude.ai link it uses claude.ai's own live connection instead, and accounts can also be saved online there. Elsewhere, accounts and single-player worlds are kept in your browser.
+
+Shared server worlds and server listings are stored on the public relays, so anyone running the game can see them — don't put anything private in server names.
 
 ## Building from source
 
@@ -65,6 +66,7 @@ python3 build.py   # writes index.html with every script and the atlas inlined
 | `audio.js` | Synthesized sound effects, ambience and music |
 | `storage.js` | Accounts, profiles and world saves |
 | `skins.js` | Player skins and character model |
+| `relay.js` | Multiplayer without claude.ai: tiny MQTT-over-WebSocket client, rooms and shared storage on public relays |
 | `net.js` | Multiplayer parties and server sessions |
 | `servers.js` | Server list, creation and shared world saving |
 | `atmos.js` | Weather and ambient effects |

@@ -27,17 +27,19 @@ const Net = {
     const room = await Cloud.room.join(this.roomName(code));
     this.setup(room, code, true);
     this.persist = false;
-    if (Cloud.db) {
-      try { await Cloud.db.doc('parties/' + code).set(this.partyDoc()); this.persist = true; this.docVer = Game.world.editVer; }
-      catch (e) { this.persist = false; }
+    if (Cloud.sdb) {
+      try {
+        await Cloud.sdb.doc('parties/' + code).set(this.partyDoc());
+        await Shared.putText('parties/' + code + '/edits', Game.world.encodeEdits());
+        this.persist = true; this.docVer = Game.world.editVer;
+      } catch (e) { this.persist = false; }
     }
     this.chatSys(`Party open — code ${this.pretty(code)}`);
     return code;
   },
   partyDoc() {
-    const e = Game.world.encodeEdits();
-    return { v: 1, code: this.code, seed: Game.world.seed, seedLabel: String(Game.seedLabel || ''), name: Game.worldName, mode: Game.mode,
-      diff: Settings.difficulty, time: Game.time, edits: e.length < 240000 ? e : '', updated: Date.now() };
+    return { v: 2, code: this.code, seed: Game.world.seed, seedLabel: String(Game.seedLabel || ''), name: Game.worldName, mode: Game.mode,
+      diff: Settings.difficulty, time: Game.time, updated: Date.now() };
   },
   /* ---------- joining ---------- */
   async join(code, status) {
@@ -55,9 +57,12 @@ const Net = {
     }
     if (!host) { try { await room.leave(); } catch (e) { } throw new Error('No party found with that code. Check the code and make sure the host is still in their world.'); }
     let edits = '';
-    if (Cloud.db) {
+    if (Cloud.sdb) {
       status && status('Downloading the world…');
-      try { const s = await Cloud.db.doc('parties/' + code).get(); if (s.exists && s.data().seed === host.presence.pm.seed) edits = s.data().edits || ''; } catch (e) { }
+      try {
+        const s = await Cloud.sdb.doc('parties/' + code).get();
+        if (s.exists && s.data().seed === host.presence.pm.seed) { const r = await Shared.getText('parties/' + code + '/edits'); if (r && r.text) edits = r.text; }
+      } catch (e) { }
     }
     const hp = host.presence;
     return { room, code, pm: hp.pm, time: typeof hp.t === 'number' ? hp.t : 0.05, pos: Array.isArray(hp.p) ? hp.p : null, edits };
@@ -86,7 +91,7 @@ const Net = {
     const keeper = !!all[0].me;
     if (keeper !== this.isHost) { this.isHost = keeper; Mobs.clear(); }
     const w = all.find(x => x.cw);
-    const saver = !!Cloud.db && !!w && !!w.me;
+    const saver = !!Cloud.sdb && !!w && !!w.me;
     if (saver && !this.saver) { this.hbT = Math.min(this.hbT, 1); }
     this.saver = saver;
   },
@@ -100,6 +105,7 @@ const Net = {
   async leave(silent) {
     if (this.server && this.active) {
       const srv = this.server;
+      if (Game.world) Servers.saveLocal(srv.id, Game.world.encodeEdits(), Game.time);
       if (this.saver && Game.world) {
         if (Game.world.editVer !== this.docVer) { this.docBusy = false; await Promise.race([this.saveServer(), sleep(5000)]); }
         try { await Promise.race([Servers.heartbeat(srv, this.remotes.size), sleep(3000)]); } catch (e) { }
@@ -113,7 +119,7 @@ const Net = {
     if (Game.world) Game.world.onEdit = null;
     if (!wasHost) Mobs.clear();
     if (room) { try { await room.leave(); } catch (e) { } }
-    if (wasHost && persist && Cloud.db) { try { await Cloud.db.doc('parties/' + code).delete(); } catch (e) { } }
+    if (wasHost && persist && Cloud.sdb) { try { await Cloud.sdb.doc('parties/' + code).delete(); await Shared.removeText('parties/' + code + '/edits'); } catch (e) { } }
     this.code = null; this.isHost = false; this.server = null; this.pvp = false; this.saver = false; this.dk = null; this.pvRing = [];
     UI.partyChanged();
   },
@@ -186,7 +192,7 @@ const Net = {
     // send presence (~12 Hz), only the fields that changed
     this.sendT -= dt;
     if (this.sendT <= 0) {
-      this.sendT = 0.08;
+      this.sendT = Cloud.mode === 'relay' ? 0.1 : 0.08;
       const o = this.buildPresence(), patch = {}; let any = false;
       for (const k in o) { const s = JSON.stringify(o[k]); if (this.sent[k] !== s) { patch[k] = o[k]; this.sent[k] = s; any = true; } }
       if (any) this.room.presence(patch).catch(e => { if (e && e.code === 'invalid_argument') { this.ring = this.ring.slice(-8); this.sent = {}; } });
@@ -196,8 +202,7 @@ const Net = {
       this.docT -= dt;
       if (this.docT <= 0 && !this.docBusy && Game.world.editVer !== this.docVer) {
         this.docT = 3; this.docBusy = true; const ver = Game.world.editVer;
-        const e = Game.world.encodeEdits();
-        Cloud.db.doc('parties/' + this.code).update({ edits: e.length < 240000 ? e : '', time: Game.time, updated: Date.now() })
+        Shared.putText('parties/' + this.code + '/edits', Game.world.encodeEdits(), { time: Game.time })
           .then(() => { this.docVer = ver; }).catch(() => { }).finally(() => { this.docBusy = false; });
       }
     }

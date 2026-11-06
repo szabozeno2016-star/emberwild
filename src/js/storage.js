@@ -2,7 +2,7 @@
    Platform capabilities, profiles (account / guest) and world saves
    ===================================================================== */
 const Cloud = {
-  user: null, db: null, room: null, uid: null, ready: false, readyP: null,
+  user: null, db: null, room: null, sdb: null, mode: 'none', uid: null, ready: false, readyP: null,
   init() {
     const use = n => {
       try {
@@ -14,6 +14,14 @@ const Cloud = {
       const [u, d, r] = await Promise.all([use('user'), use('db'), use('room')]);
       this.user = u; this.db = d; this.room = r;
       if (u) { try { this.uid = await u.id(); } catch (e) { this.uid = null; } }
+      // outside claude.ai, multiplayer and servers go through the public relay
+      if (r) { this.mode = 'claude'; this.sdb = d; }
+      else if (typeof WebSocket !== 'undefined') { this.mode = 'relay'; this.room = RelayRooms; this.sdb = RelayDB; }
+      if (!this.uid) {
+        let id = LS.get('emberwild.uid');
+        if (typeof id !== 'string' || !/^l[a-z0-9]{6,24}$/.test(id)) { id = 'l' + newId().replace(/[^a-z0-9]/g, ''); LS.set('emberwild.uid', id); }
+        this.uid = id;
+      }
       this.ready = true;
     })();
     return this.readyP;

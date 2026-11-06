@@ -159,6 +159,7 @@ function showError(msg) {
     $('joinCode').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') UI.act('mpJoin'); });
     $('pName').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') UI.act('profSave'); });
     Cloud.init().then(() => Profile.load()).then(() => {
+      if (!Cloud.canAccount) $('wCreateSub').textContent = 'Pick a name and skin for multiplayer. Your account and worlds are kept in this browser.';
       UI.refreshChip(); UI.refreshContinue();
       if (!Profile.exists && UI.cur === 'title') UI.show('welcome');
       else if (UI.cur === 'title') UI.show('title');

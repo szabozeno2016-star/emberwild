@@ -178,10 +178,12 @@ Object.assign(UI, {
       }
       box.appendChild(row);
     }
-    if (Servers.fetchError) st.textContent = 'Only the official server is shown — the server list could not be loaded.';
+    if (Servers.fetchError) st.textContent = Cloud.mode === 'relay' ? 'Couldn’t reach the relay — only the official server is shown. Check your connection and press Refresh.' : 'Only the official server is shown — the server list could not be loaded.';
     $('srvCreateBtn').disabled = cw === false;
     $('srvCreateBtn').title = cw === false ? 'Creating servers needs Contributor access to this game' : '';
-    $('srvNote').textContent = cw === false
+    $('srvNote').textContent = Cloud.mode === 'relay'
+      ? 'Servers are shared through a free public relay: everyone who opens this game sees them and can join.'
+      : cw === false
       ? 'You have view access: you can join any server, but creating one needs Contributor access. Your changes are saved while a player with edit access is online.'
       : 'Servers stay online for everyone. Whoever is playing keeps the world running.';
   },

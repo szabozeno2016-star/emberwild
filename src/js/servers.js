@@ -25,7 +25,7 @@ const SERVER_STALE = 75000;  // an "online" heartbeat older than this means nobo
 const Servers = {
   list: [], canWrite: null, writeChecked: false,
   get available() { return !!Cloud.room; },
-  ref(id) { return Cloud.db.doc('servers/' + id); },
+  ref(id) { return Cloud.sdb.doc('servers/' + id); },
   stateCol(id) { return this.ref(id).collection('state'); },
   roomName(id) { return 'ew-srv-' + String(id).toLowerCase(); },
   official(id) { return OFFICIAL_SERVERS.find(s => s.id === id) || null; },
@@ -35,7 +35,8 @@ const Servers = {
   async checkWrite() {
     if (this.writeChecked) return this.canWrite;
     this.writeChecked = true;
-    if (!Cloud.db) { this.canWrite = false; return false; }
+    if (!Cloud.sdb) { this.canWrite = false; return false; }
+    if (Cloud.mode === 'relay') { this.canWrite = true; return true; }
     try { const v = Cloud.user && Cloud.user.can ? await Cloud.user.can('data.write') : null; this.canWrite = v === true ? true : v === false ? false : null; }
     catch (e) { this.canWrite = null; }
     return this.canWrite;
@@ -44,9 +45,10 @@ const Servers = {
 
   async fetch() {
     const rows = OFFICIAL_SERVERS.map(s => Object.assign({ online: 0 }, s));
-    if (Cloud.db) {
+    this.fetchError = false;
+    if (Cloud.sdb) {
       try {
-        const q = await Promise.race([Cloud.db.collection('servers').get(), sleep(10000).then(() => { throw new Error('timeout'); })]);
+        const q = await Promise.race([Cloud.sdb.collection('servers').get(), sleep(10000).then(() => { throw new Error('timeout'); })]);
         for (const d of q.docs) {
           if (!d.exists) continue;
           const v = d.data() || {}, id = d.id;
@@ -67,7 +69,7 @@ const Servers = {
   mine() { return this.list.filter(s => !s.official && s.owner && s.owner === Cloud.uid); },
 
   async create(o) {
-    if (!Cloud.db || !Cloud.uid) throw new Error('Creating servers needs the live connection claude.ai gives this game.');
+    if (!Cloud.sdb || !Cloud.uid) throw new Error('Creating servers isn’t available here.');
     const name = this.clean(o.name).slice(0, 24), desc = this.clean(o.desc).slice(0, 90);
     if (!name) throw new Error('Give your server a name.');
     if (OFFICIAL_SERVERS.some(s => s.name.toLowerCase() === name.toLowerCase())) throw new Error('That name belongs to an official server. Pick another.');
@@ -81,42 +83,42 @@ const Servers = {
     return Object.assign({}, doc, { online: 0 });
   },
   async remove(srv) {
-    if (!Cloud.db || srv.official) return;
+    if (!Cloud.sdb || srv.official) return;
     try {
-      const m = await this.stateCol(srv.id).doc('meta').get();
-      const parts = m.exists ? (m.data().parts | 0) : 0;
-      for (let i = 0; i < parts; i++) { try { await this.stateCol(srv.id).doc('p' + i).delete(); } catch (e) { } }
-      try { await this.stateCol(srv.id).doc('meta').delete(); } catch (e) { }
+      await Shared.removeText('servers/' + srv.id + '/state');
       await this.ref(srv.id).delete();
+      LS.del(this.worldKey(srv.id));
     } catch (e) { throw new Error('Could not delete that server.'); }
   },
 
   /* ---------- world state ---------- */
   async loadState(id) {
-    const out = { edits: '', time: null, weather: null };
-    if (!Cloud.db) return out;
-    try {
-      const m = await this.stateCol(id).doc('meta').get();
-      if (!m.exists) return out;
-      const meta = m.data() || {};
-      out.time = typeof meta.time === 'number' && isFinite(meta.time) ? meta.time : null;
-      out.weather = meta.weather || null;
-      let s = '';
-      for (let i = 0; i < clamp(meta.parts | 0, 0, 64); i++) {
-        const p = await this.stateCol(id).doc('p' + i).get();
-        if (p.exists) s += String(p.data().s || '');
-      }
-      out.edits = s;
-    } catch (e) { }
+    const out = { edits: '', time: null, weather: null, updated: 0 };
+    if (Cloud.sdb) {
+      try {
+        const r = await this.getText(id);
+        if (r && r.text !== null) {
+          const meta = r.meta || {};
+          out.edits = r.text; out.updated = meta.updated || 0;
+          out.time = typeof meta.time === 'number' && isFinite(meta.time) ? meta.time : null;
+          out.weather = meta.weather || null;
+        }
+      } catch (e) { }
+    }
+    // this browser's own copy wins if it is newer (or the shared copy could not be read)
+    const local = LS.get(this.worldKey(id));
+    if (local && typeof local.edits === 'string' && (local.ts || 0) > out.updated) {
+      out.edits = local.edits; out.updated = local.ts; out.time = typeof local.time === 'number' ? local.time : out.time;
+    }
     return out;
   },
+  getText(id) { return Shared.getText('servers/' + id + '/state'); },
   async saveState(id, edits, time, weather) {
-    const parts = [];
-    for (let i = 0; i < edits.length; i += PART) parts.push(edits.slice(i, i + PART));
-    const col = this.stateCol(id);
-    for (let i = 0; i < parts.length; i++) await col.doc('p' + i).set({ s: parts[i] });
-    await col.doc('meta').set({ parts: parts.length, time, weather, updated: Date.now() });
+    this.saveLocal(id, edits, time);
+    await Shared.putText('servers/' + id + '/state', edits, { time, weather });
   },
+  worldKey(id) { return 'emberwild.srvw.' + id; },
+  saveLocal(id, edits, time) { LS.set(this.worldKey(id), { edits, time, ts: Date.now() }); },
   async heartbeat(srv, online) {
     const ref = this.ref(srv.id);
     if (srv.official) await ref.set({ v: 1, id: srv.id, official: true, online, seen: Date.now() });

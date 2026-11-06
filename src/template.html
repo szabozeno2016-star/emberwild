@@ -421,14 +421,14 @@ input[type=range]::-moz-range-thumb{width:14px;height:24px;background:#8a8580;bo
 <!-- multiplayer -->
 <div id="sc-multi" class="screen dim">
   <div class="panel" style="width:min(640px,94vw)"><h2>Multiplayer</h2>
-    <div id="mpOff" class="hidden"><p>Multiplayer needs the live connection that claude.ai gives this game. Open it from its claude.ai link while signed in, then try again.</p></div>
+    <div id="mpOff" class="hidden"><p>Multiplayer isn’t available in this view.</p></div>
     <div id="mpOn">
       <div class="mpgrid">
         <div class="mpcard"><h3>Host a party</h3><p style="margin:0">Pick one of your worlds. You’ll get a 6-character code to give your friends.</p><button class="btn primary" data-act="mpHost">Choose a world</button></div>
         <div class="mpcard"><h3>Join a party</h3><input type="text" id="joinCode" maxlength="7" placeholder="ABC-123" autocomplete="off"><button class="btn primary" data-act="mpJoin">Join</button></div>
       </div>
       <div id="mpStatus"></div>
-      <p style="font-size:14px">Friends need access to this game: share it from the Share menu. People shared as Contributor or Editor can save their account and worlds online; Viewers can still join parties.</p>
+      <p style="font-size:14px" id="mpNote">Friends need access to this game: share it from the Share menu. People shared as Contributor or Editor can save their account and worlds online; Viewers can still join parties.</p>
     </div>
     <div class="btnrow"><button class="btn" data-act="back">Back</button></div>
   </div>
@@ -437,7 +437,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:24px;background:#8a8580;bo
 <!-- servers -->
 <div id="sc-servers" class="screen dim">
   <div class="panel" style="width:min(720px,95vw)"><h2>Servers</h2>
-    <div id="srvOff" class="hidden"><p>Servers need the live connection that claude.ai gives this game. Open it from its claude.ai link while signed in, then try again.</p></div>
+    <div id="srvOff" class="hidden"><p>Servers aren’t available in this view.</p></div>
     <div id="srvOn">
       <div id="srvList"></div>
       <div id="srvStatus"></div>

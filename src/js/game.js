@@ -176,7 +176,7 @@ const Game = {
   },
   /* ---------- servers ---------- */
   async joinServer(srv, status) {
-    if (!Cloud.room) throw new Error('Servers need the live connection that claude.ai gives this game.');
+    if (!Cloud.room) throw new Error('Servers aren’t available in this view.');
     status && status('Connecting…');
     await Servers.checkWrite();
     const room = await Cloud.room.join(Servers.roomName(srv.id));

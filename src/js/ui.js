@@ -141,7 +141,10 @@ const UI = {
     if (name === 'worlds') this.refreshWorlds();
     if (name === 'servers') this.refreshServers();
     if (name === 'newserver') this.openNewServer();
-    if (name === 'multi') { $('mpOff').classList.toggle('hidden', Net.available); $('mpOn').classList.toggle('hidden', !Net.available); $('mpStatus').textContent = ''; }
+    if (name === 'multi') {
+      $('mpOff').classList.toggle('hidden', Net.available); $('mpOn').classList.toggle('hidden', !Net.available); $('mpStatus').textContent = '';
+      if (Cloud.mode === 'relay') $('mpNote').textContent = 'Send your friends the link to this page and your party code. Parties connect over the internet through a free public relay — no sign-in needed.';
+    }
     $('fx').style.opacity = menu && name !== 'quit' ? 1 : 0;
     if (name === 'credits') { const r = document.querySelector('.credits .roll'); r.style.animation = 'none'; void r.offsetWidth; r.style.animation = ''; }
     if (name === 'loading') { $('loadBar').style.width = '0%'; $('loadTip').textContent = LOAD_TIPS[(Math.random() * LOAD_TIPS.length) | 0]; }
