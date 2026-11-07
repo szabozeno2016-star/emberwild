@@ -164,7 +164,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:24px;background:#8a8580;bo
   box-shadow:inset 2px 2px 0 rgba(255,255,255,.06);transition:opacity .3s, transform .3s}
 #debug{position:absolute;left:12px;top:12px;font-size:15px;line-height:1.35;text-align:left;color:#fff;text-shadow:2px 2px 0 #000;white-space:pre;font-family:ui-monospace,Menlo,Consolas,monospace}
 #fpsBox{position:absolute;right:12px;top:12px;font-size:14px;color:#fff;text-shadow:2px 2px 0 #000}
-#toasts{position:absolute;top:16px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
+#toasts{position:fixed;z-index:40;pointer-events:none;top:16px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
 .toast{padding:8px 16px;background:rgba(14,10,8,.82);border:3px solid #000;font-size:17px;color:#fff;animation:tin .3s ease-out,tout .5s 2.8s ease-in forwards;
   box-shadow:inset 2px 2px 0 rgba(255,255,255,.07)}
 .toast.gold{color:#ffd480;border-color:#5a3410;box-shadow:0 0 16px rgba(255,150,50,.35)}
@@ -193,6 +193,14 @@ input[type=range]::-moz-range-thumb{width:14px;height:24px;background:#8a8580;bo
 .armorcol .slot .ph{width:70%;height:70%;opacity:.18;image-rendering:pixelated;filter:grayscale(1)}
 #invFig{width:64px;height:128px;image-rendering:pixelated;background:rgba(0,0,0,.25);border:2px solid rgba(0,0,0,.6);flex:none}
 #furnPanel{width:min(360px,92vw)}
+#chestPanel .grid9{padding:6px 0 2px}
+#sc-inv.chestmode .invwrap{flex-direction:column;align-items:center;gap:10px;flex-wrap:nowrap}
+#sc-inv.chestmode #chestPanel{order:-1}
+#sc-inv.chestmode .invtop,#sc-inv.chestmode #invHint{display:none}
+#sc-inv.chestmode .invwrap .panel{padding:12px 18px}
+#chestPanel .slot{background:rgba(70,52,34,.9)}
+#chestPanel .fhint{max-width:calc(var(--slot) * 9 + 24px);margin:8px 0 0}
+#chestPanel .ptitle{max-width:calc(var(--slot) * 9 + 24px)}
 .furn{display:flex;align-items:center;justify-content:center;gap:18px;padding:10px 6px}
 .fcol{display:flex;flex-direction:column;align-items:center;gap:6px}
 .flame{width:14px;height:28px;background:#1a1411;border:2px solid #000;position:relative}
@@ -358,11 +366,11 @@ input[type=range]::-moz-range-thumb{width:14px;height:24px;background:#8a8580;bo
 <div id="profileChip" class="hidden" title="Profile &amp; skin"><canvas id="chipFace" width="32" height="32"></canvas><div><b id="chipName"></b><span id="chipKind"></span></div></div>
 <div id="saveNote"></div>
 
+<div id="toasts"></div>
 <div id="hud" class="hidden">
   <div id="crosshair"></div>
   <div id="debug" class="hidden"></div>
   <div id="fpsBox" class="hidden"></div>
-  <div id="toasts"></div>
   <div id="banner"><div class="bt"></div><div class="bs"></div></div>
   <div id="pickups"></div>
   <div id="partyBox" class="hidden"><div class="pt"><span id="partyLabel">Party</span> <b id="partyCode"></b></div><div id="partyList"></div></div>
@@ -397,7 +405,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:24px;background:#8a8580;bo
       </div>
     </div>
   </div>
-  <div class="foot l">Emberwild · v1.1</div>
+  <div class="foot l">Emberwild · v1.2</div>
   <div class="foot r">Endless worlds · Survival &amp; Creative</div>
 </div>
 
@@ -533,12 +541,12 @@ input[type=range]::-moz-range-thumb{width:14px;height:24px;background:#8a8580;bo
       <kbd>T</kbd><span>Chat in multiplayer — <b>/</b> for commands: /msg, /tp, /me, /list</span>
       <kbd>Tab</kbd><span>Hold to see everyone in your game and their connection</span>
       <kbd>V</kbd><span>Push to talk (turn on Voice chat in Settings)</span>
-      <kbd>Right click</kbd><span>On a furnace: smelt · on a bed: sleep · with armour: equip</span>
-      <kbd>T</kbd><span>Chat (in a party)</span>
+      <kbd>Right click</kbd><span>On a chest: open · on a door: open/close · on a furnace: smelt · on a bed: sleep · with armour: equip</span>
+      <kbd>W on a ladder</kbd><span>Climb up · Shift holds on · let go to slide down</span>
       <kbd>F1 · F3</kbd><span>Hide HUD · debug info</span>
       <kbd>Esc</kbd><span>Pause</span>
     </div>
-    <p style="margin-top:16px">The world is endless: walk in any direction and new land keeps generating. In Creative you have every block, can fly and break anything instantly. In Survival, keep your hunger up with apples and wild berries, light torches before nightfall, and watch your step — long falls hurt.</p>
+    <p style="margin-top:16px">The world is endless: walk in any direction and new land keeps generating. In Creative you have every block, can fly and break anything instantly. In Survival, keep your hunger up with apples and wild berries, light torches before nightfall, and watch your step — long falls hurt. Build a house with a door, keep your treasure in chests, and climb down mines on ladders. Herds of sheep, cows, pigs and hens roam the grasslands — and don’t hug a cactus.</p>
     <div class="btnrow"><button class="btn primary" data-act="back">Back</button></div>
   </div>
 </div>
@@ -585,6 +593,11 @@ input[type=range]::-moz-range-thumb{width:14px;height:24px;background:#8a8580;bo
       <div class="ptitle"><span>Crafting</span><span id="benchState"></span></div>
       <div class="tabs" id="tabs"></div>
       <div id="recipes"></div>
+    </div>
+    <div class="panel inv" id="chestPanel">
+      <div class="ptitle"><span id="chestTitle">Chest</span><span style="text-transform:none;letter-spacing:0;color:#9c8c7b;font-size:12px">Shift-click moves stacks in and out</span></div>
+      <div class="grid9" id="chestGrid"></div>
+      <p class="fhint" id="chestHint">27 slots. Break the chest and everything inside spills out.</p>
     </div>
     <div class="panel inv" id="furnPanel">
       <div class="ptitle"><span>Furnace</span><span id="furnState" style="text-transform:none;letter-spacing:0;font-size:12px"></span></div>

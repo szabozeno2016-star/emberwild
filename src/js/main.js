@@ -125,7 +125,7 @@ function dropHeld(all) {
 }
 function pickBlock() {
   const t = Game.target; if (!t) return;
-  let id = t.id; if (isTorch(id)) id = B.TORCH;
+  let id = t.id; if (isTorch(id)) id = B.TORCH; if (isChest(id)) id = B.CHEST; if (id === B.FURNACE_LIT) id = B.FURNACE;
   if (!ITEMS[id]) return;
   const inv = Game.inv;
   for (let i = 0; i < 9; i++) if (inv.s[i] && inv.s[i].id === id) { inv.sel = i; return; }

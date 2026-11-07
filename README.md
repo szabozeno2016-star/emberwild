@@ -5,14 +5,27 @@ Endless procedurally generated worlds, survival and creative modes, crafting, sm
 
 ### ▶ [Play it now](https://szabozeno2016-star.github.io/emberwild/)
 
-![Sunset on Heavenly graphics](screenshots/heavenly-sunset.png)
+![Plains, beach and desert in a v1.2 world](screenshots/biomes.png)
+
+### New in v1.2 — the big world update
+- **Biomes** — plains, forests, birch and dark forests, taiga, snowy plains, deserts with cacti, savannas, swamps, rivers, beaches, oceans, windswept hills and snowy peaks. Grass and leaves change colour from biome to biome.
+- **Farm animals** — sheep, cows, pigs and hens roam in herds. Sheep give wool, cows give hide, and all of them give food.
+- **Chests** — 27 slots of storage that face whoever places them, are saved with your world, and are shared live in multiplayer.
+- **Doors & ladders** — wooden doors that open and close (and keep night creatures out) and ladders to climb up cliffs and down mines.
+- **New blocks** — sandstone, gravel, clay, cactus, dead bushes, snowy grass and wool. Mind the cactus: it hurts.
+- Smoother, more natural terrain with rivers and mountains, and spawn points on friendly flat ground. Worlds made before v1.2 keep their original terrain.
+
+| Farm animals | A cabin with a door |
+|---|---|
+| ![Sheep, cow, pig and hen on the plains](screenshots/farm-animals.png) | ![A wooden cabin with a door and windows](screenshots/cabin.png) |
 
 ## Features
 
-- **Infinite worlds** — seeded terrain with forests, beaches, snowy peaks, caves, ores and glowing mushrooms.
+- **Infinite worlds** — seeded terrain with 15 biomes, rivers, mountains, caves, ores and glowing mushrooms.
 - **Survival** — health, hunger, fall damage, drowning; craft tools from wood to Skyshard, smelt ores in furnaces, cook food on campfires, sleep in beds.
 - **Creative** — fly (double-tap Space), instant breaking, and a catalogue of every block.
-- **Creatures** — Gloomlings that hunt at night, grazing Mossbacks, and Duskcrawlers deep in the caves.
+- **Creatures** — Gloomlings that hunt at night, Duskcrawlers deep in the caves, grazing Mossbacks and herds of sheep, cows, pigs and hens.
+- **Building** — chests, doors, ladders, beds, furnaces, workbenches, torches, glass, bricks and more.
 - **Armour** — Hide, Sunvein and Skyshard sets.
 - **Atmosphere** — rain and thunderstorms, fireflies, campfire smoke, synthesized sound effects and generative music.
 - **Six graphics levels** — Potato, Bad, Medium, Normal, Good and Heavenly (bloom, sun & moon rays, cinematic colour).
@@ -34,7 +47,7 @@ Endless procedurally generated worlds, survival and creative modes, crafting, sm
 | W A S D | Move |
 | Mouse | Look |
 | Left click (hold) | Mine / attack |
-| Right click | Place / use / eat |
+| Right click | Place / use / eat · open chests and doors |
 | Space | Jump (double-tap to fly in Creative) |
 | Shift / Ctrl | Sneak / sprint |
 | E | Inventory & crafting |
@@ -65,7 +78,8 @@ python3 build.py   # writes index.html with every script and the atlas inlined
 | File | What it does |
 |---|---|
 | `core.js` | Maths, noise, blocks, items, recipes, settings, graphics presets |
-| `world.js` | Terrain generation, caves, lighting, chunk meshing |
+| `world.js` | Original terrain generator, caves, lighting, chunk meshing, chest storage |
+| `world2.js` | v1.2 terrain: climate, biomes, rivers, mountains, trees and biome colours |
 | `render.js` | WebGL2 renderer, sky, clouds, water, bloom and sun-ray post-processing |
 | `entities.js` | Physics, particles, item drops, creatures |
 | `audio.js` | Synthesized sound effects, ambience and music |

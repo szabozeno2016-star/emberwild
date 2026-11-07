@@ -38,7 +38,7 @@ const Net = {
     return code;
   },
   partyDoc() {
-    return { v: 2, code: this.code, seed: Game.world.seed, seedLabel: String(Game.seedLabel || ''), name: Game.worldName, mode: Game.mode,
+    return { v: 2, gen: Game.world.gen, code: this.code, seed: Game.world.seed, seedLabel: String(Game.seedLabel || ''), name: Game.worldName, mode: Game.mode,
       diff: Settings.difficulty, time: Game.time, updated: Date.now() };
   },
   /* ---------- joining ---------- */
@@ -70,7 +70,7 @@ const Net = {
   setup(room, code, isHost) {
     this.room = room; this.code = code; this.isHost = isHost; this.active = true; this.hostLeft = false;
     if (!this.server) this.myJ = isHost ? Date.now() - 1e9 : Date.now(); // the host who opened the party stays first in line
-    this.remotes.clear(); this.ring = []; this.atkRing = []; this.hitRing = []; this.sent = {}; this.seq = 0;
+    this.remotes.clear(); this.ring = []; this.atkRing = []; this.hitRing = []; this.csRing = []; this.csSeq = 0; this.sent = {}; this.seq = 0;
     const meP = room.peers().find(p => p.sameTab); this.me = meP ? meP.peer : null;
     this.unsub.push(room.onPeers(ch => this.onPeers(ch), e => this.onError(e)));
     Game.world.onEdit = (x, y, z, id) => this.localEdit(x, y, z, id);
@@ -157,6 +157,13 @@ const Net = {
     this.ring.push([this.seq, x, y, z, id]);
     if (this.ring.length > 32) this.ring.shift();
   },
+  // shared chests: the newest contents of the last few chests we touched (receivers keep the highest version)
+  chestEdit(c) {
+    if (!this.csRing) this.csRing = [];
+    this.csRing = this.csRing.filter(e => !(e[1] === c.x && e[2] === c.y && e[3] === c.z));
+    this.csRing.push([++this.csSeq, c.x, c.y, c.z, c.v, encodeSlots(c.s)]);
+    if (this.csRing.length > 3) this.csRing.shift();
+  },
   attack(mobId, dmg, kx, kz) {
     this.atkRing.push([++this.atkSeq, mobId, dmg, r2(kx), r2(kz)]);
     if (this.atkRing.length > 4) this.atkRing.shift();
@@ -222,7 +229,7 @@ const Net = {
       v: 1, role: this.isHost ? 'host' : 'guest', n: pr.name, sk: Skins.key(pr.skin),
       p: [r2(P.pos[0]), r2(P.pos[1]), r2(P.pos[2])], r: [r2(P.yaw), r2(P.pitch)],
       st: [(P.sneak ? 1 : 0) | (P.flying ? 2 : 0) | (P.alive ? 0 : 4), this.swingCount, Game.inv.held ? Game.inv.held.id : 0],
-      e: [].concat(...this.ring), a: [].concat(...this.atkRing), c: this.chatMsg, ar: Game.inv.armorMats(),
+      e: [].concat(...this.ring), a: [].concat(...this.atkRing), c: this.chatMsg, ar: Game.inv.armorMats(), cs: this.csRing || [],
       hp: P.alive ? Math.max(0, Math.ceil(P.health)) : 0, j: this.myJ, vc: Voice.transmitting ? 1 : 0,
     };
     if (this.server) {
@@ -230,9 +237,9 @@ const Net = {
       if (this.pvp) { o.pv = [].concat(...this.pvRing); o.sc = [Game.score.k, Game.score.d]; o.dk = this.dk; }
     }
     if (this.isHost) {
-      o.pm = { seed: Game.world.seed, sl: String(Game.seedLabel || '').slice(0, 40), name: Game.worldName.slice(0, 32), mode: Game.mode, diff: Settings.difficulty };
+      o.pm = { gen: Game.world.gen, seed: Game.world.seed, sl: String(Game.seedLabel || '').slice(0, 40), name: Game.worldName.slice(0, 32), mode: Game.mode, diff: Settings.difficulty };
       o.t = Math.round(Game.time * 10000) / 10000;
-      o.m = [].concat(...Mobs.list.slice(0, 16).map(m => [m.id, m.type === 'moss' ? 1 : m.type === 'crawl' ? 2 : 0, r2(m.pos[0]), r2(m.pos[1]), r2(m.pos[2]), r2(m.yaw), m.hurt > 0 ? 1 : 0, r2(m.walk % 100), m.type === 'moss' ? r2(m.graze) : (m.swing > 0.5 ? 1 : 0)]));
+      o.m = [].concat(...Mobs.list.slice(0, 20).map(m => [m.id, m.animal ? ANIMALS[m.type].code : m.type === 'crawl' ? 2 : 0, r2(m.pos[0]), r2(m.pos[1]), r2(m.pos[2]), r2(m.yaw), m.hurt > 0 ? 1 : 0, r2(m.walk % 100), m.animal ? r2(m.graze) : (m.swing > 0.5 ? 1 : 0)]));
       o.w = r2(Atmos.rainTarget);
       o.h = this.hitRing.map(h => h.slice());
     }
@@ -418,6 +425,13 @@ const Net = {
       }
       r.lastE = maxSeq;
     }
+    // chest contents
+    if (Array.isArray(s.cs)) for (const e of s.cs.slice(0, 4)) {
+      if (!Array.isArray(e) || num(e[0]) <= (r.lastCs || 0)) continue;
+      r.lastCs = num(e[0]);
+      const x = num(e[1]) | 0, y = num(e[2]) | 0, z = num(e[3]) | 0;
+      if (y >= 0 && y < WH && Array.isArray(e[5]) && e[5].length <= 27 * 4) Game.applyRemoteChest(x, y, z, num(e[4]) | 0, e[5]);
+    }
     // chat
     if (Array.isArray(s.c) && num(s.c[0]) > r.lastC) {
       r.lastC = num(s.c[0]);
@@ -431,7 +445,7 @@ const Net = {
       for (let i = 0; i + 4 < s.a.length; i += 5) {
         const sq = num(s.a[i]); if (sq <= r.lastA) continue; r.lastA = sq;
         const m = Mobs.list.find(m => m.id === num(s.a[i + 1]));
-        if (m) { m.health -= clamp(num(s.a[i + 2]), 0, 8); m.hurt = 0.35; m.byPlayer = false; m.vel[0] += clamp(num(s.a[i + 3]), -1, 1) * 7; m.vel[2] += clamp(num(s.a[i + 4]), -1, 1) * 7; m.vel[1] = 5; Mobs.onHit(m, r.tpos); if (m.type !== 'moss') GameAudio.mobHurt(); }
+        if (m) { m.health -= clamp(num(s.a[i + 2]), 0, 8); m.hurt = 0.35; m.byPlayer = false; m.vel[0] += clamp(num(s.a[i + 3]), -1, 1) * 7; m.vel[2] += clamp(num(s.a[i + 4]), -1, 1) * 7; m.vel[1] = 5; Mobs.onHit(m, r.tpos); if (!m.animal) GameAudio.mobHurt(); }
       }
     }
     // guests follow the host's clock, creatures and hits
@@ -448,7 +462,7 @@ const Net = {
   },
   onRemoteDeath(r, dk) {
     const killer = typeof dk[1] === 'string' && dk[1] ? dk[1] : null;
-    const verbs = { fall: 'fell from a high place', drown: 'drowned', fire: 'got too close to a fire', gloom: 'was caught by a Gloomling', crawler: 'was bitten by a Duskcrawler', starve: 'starved', void: 'fell out of the world' };
+    const verbs = { fall: 'fell from a high place', cactus: 'hugged a cactus', drown: 'drowned', fire: 'got too close to a fire', gloom: 'was caught by a Gloomling', crawler: 'was bitten by a Duskcrawler', starve: 'starved', void: 'fell out of the world' };
     if (killer && killer === this.me) {
       this.chatSys(`You defeated ${r.name}!`);
       Game.onKill(r, Array.isArray(dk[3]) ? dk[3] : []);
@@ -464,6 +478,7 @@ const Net = {
     if (w.isLoaded(x, z)) {
       const prev = w.getBlock(x, y, z);
       w.setBlock(x, y, z, id, true); if (id === 0) Game.checkSupport(x, y, z, true);
+      if (isChest(prev) && !isChest(id)) w.chests.delete(x + ',' + y + ',' + z);
       // you see and hear what other players build and break
       if (audible && prev !== id) {
         if (id === 0 && prev && FACE_TEX[prev]) {

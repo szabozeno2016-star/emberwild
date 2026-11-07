@@ -402,7 +402,7 @@ const UI = {
     if (!this.hudOn) return;
     const P = Game.player, inv = Game.inv;
     $('hud').style.visibility = Game.hideHud ? 'hidden' : 'visible';
-    $('bars').style.visibility = Game.creative ? 'hidden' : 'visible';
+    $('bars').style.visibility = Game.creative ? 'hidden' : '';
     if (inv.ver !== this.lastInvVer || inv.sel !== this.lastSel) {
       if (inv.sel !== this.lastSel && inv.held) { $('itemName').textContent = ITEMS[inv.held.id].name; this.nameT = 2.2; }
       this.lastInvVer = inv.ver; this.lastSel = inv.sel;
@@ -434,7 +434,7 @@ const UI = {
     if (ap !== this.lastArmor) {
       this.lastArmor = ap;
       this.armorEls.forEach((el, i) => { const [bg, fg] = el.children; this.iconPos(bg, 'armor_empty'); this.iconPos(fg, ap >= (i + 1) * 2 ? 'armor_full' : ap === i * 2 + 1 ? 'armor_half' : null); });
-      $('armorRow').style.visibility = ap > 0 ? 'visible' : 'hidden';
+      $('armorRow').style.visibility = ap > 0 ? '' : 'hidden';
     }
     if (this.furnace && this.cur === 'inv') {
       const f = this.furnace;
@@ -466,7 +466,6 @@ const UI = {
     const box = $('toasts'); box.appendChild(t);
     while (box.children.length > 4) box.firstChild.remove();
     setTimeout(() => t.remove(), 3400);
-    if (Game.state !== 'play') { box.parentElement.classList.remove('hidden'); }
   },
   banner(title, sub) {
     const b = $('banner'); b.querySelector('.bt').textContent = title; b.querySelector('.bs').textContent = sub || '';
@@ -518,6 +517,7 @@ const UI = {
     for (let i = 0; i < 9; i++) mk($('invHot'), i);
     for (let i = 0; i < 4; i++) mk($('armorSlots'), 200 + i);
     mk($('fIn'), 300); mk($('fFuel'), 301); mk($('fOut'), 302);
+    for (let i = 0; i < 27; i++) mk($('chestGrid'), 400 + i);
     const ph = ['hide_helm', 'hide_chest', 'hide_legs', 'hide_boots'];
     this.armorPH = ph.map(n => { const c = document.createElement('canvas'); c.width = c.height = 16; c.getContext('2d').drawImage(this.tiles[TEX[n]], 0, 0); return c.toDataURL(); });
     const sl = $('smeltList');
@@ -545,21 +545,25 @@ const UI = {
       const tt = $('tooltip'); tt.style.left = (e.clientX + 16) + 'px'; tt.style.top = (e.clientY + 12) + 'px';
     });
   },
-  openInventory(furnace) {
+  openInventory(furnace, chest) {
     if (Game.state !== 'play' || !Game.player.alive) return;
-    this.furnace = furnace || null;
+    this.furnace = furnace || null; this.chest = chest || null;
     $('furnPanel').classList.toggle('hidden', !this.furnace);
+    $('chestPanel').classList.toggle('hidden', !this.chest);
+    if (this.chest) { GameAudio.chest(true); $('sc-inv').classList.add('chestmode'); } else $('sc-inv').classList.remove('chestmode');
     Game.ui = 'inv'; Input.mouseL = Input.mouseR = false; Input.keys = {};
     Game.benchNear = Game.scanBench();
-    $('craftPanel').classList.toggle('hidden', Game.creative || !!this.furnace);
-    $('catPanel').classList.toggle('hidden', !Game.creative || !!this.furnace);
+    const side = !!(this.furnace || this.chest);
+    $('craftPanel').classList.toggle('hidden', Game.creative || side);
+    $('catPanel').classList.toggle('hidden', !Game.creative || side);
     if (Game.creative) this.refreshCatalog();
     this.show('inv'); this.refreshInventory();
     if (document.pointerLockElement) document.exitPointerLock();
   },
   closeInventory() {
     if (Game.cursor) { const left = Game.inv.add(Game.cursor.id, Game.cursor.n, Game.cursor.d); if (left) throwStack({ ...Game.cursor, n: left }, left); Game.cursor = null; }
-    this.refreshCursor(); this.hideTip(); this.furnace = null;
+    if (this.chest) { GameAudio.chest(false); Game.chestClosed(this.chest); }
+    this.refreshCursor(); this.hideTip(); this.furnace = null; this.chest = null;
     Game.ui = null; this.show(null);
     lockPointer(true);
   },
@@ -568,6 +572,7 @@ const UI = {
     for (let i = 0; i < 36; i++) this.invEls[i].innerHTML = this.slotHTML(inv.s[i]);
     for (let s = 0; s < 4; s++) this.invEls[200 + s].innerHTML = inv.armor[s] ? this.slotHTML(inv.armor[s]) : `<img class="ph" src="${this.armorPH[s]}">`;
     if (this.furnace) for (let k = 0; k < 3; k++) this.invEls[300 + k].innerHTML = this.slotHTML(this.furnace.s[k]);
+    if (this.chest) for (let k = 0; k < 27; k++) this.invEls[400 + k].innerHTML = this.slotHTML(this.chest.s[k]);
     const fg = $('invFig').getContext('2d'); fg.imageSmoothingEnabled = false; fg.clearRect(0, 0, 64, 128);
     if (Profile.data) fg.drawImage(Skins.figure(Profile.data.skin, 2), 0, 0);
     const P = Game.player, S = Game.stats, tod = Game.time % 1;
@@ -597,9 +602,14 @@ const UI = {
     tt.style.opacity = 1;
   },
   hideTip() { $('tooltip').style.opacity = 0; },
-  // slot addressing: 0-35 inventory, 200-203 armour, 300-302 furnace (input, fuel, output)
-  getS(i) { const inv = Game.inv; if (i < 36) return inv.s[i]; if (i >= 200 && i < 204) return inv.armor[i - 200]; if (i >= 300 && this.furnace) return this.furnace.s[i - 300]; return null; },
-  setS(i, v) { const inv = Game.inv; if (i < 36) inv.s[i] = v; else if (i >= 200 && i < 204) inv.armor[i - 200] = v; else if (i >= 300 && this.furnace) this.furnace.s[i - 300] = v; },
+  // slot addressing: 0-35 inventory, 200-203 armour, 300-302 furnace (input, fuel, output), 400-426 chest
+  getS(i) { const inv = Game.inv; if (i < 36) return inv.s[i]; if (i >= 200 && i < 204) return inv.armor[i - 200]; if (i >= 400) return this.chest ? this.chest.s[i - 400] : null; if (i >= 300 && this.furnace) return this.furnace.s[i - 300]; return null; },
+  setS(i, v) {
+    const inv = Game.inv;
+    if (i < 36) inv.s[i] = v; else if (i >= 200 && i < 204) inv.armor[i - 200] = v;
+    else if (i >= 400) { if (this.chest) { this.chest.s[i - 400] = v; this.chest.dirty = true; } }
+    else if (i >= 300 && this.furnace) this.furnace.s[i - 300] = v;
+  },
   accepts(i, st) {
     if (!st) return true;
     if (i >= 200 && i < 204) return !!(ITEMS[st.id].armor && ITEMS[st.id].armor.slot === i - 200);
@@ -620,7 +630,8 @@ const UI = {
     if (shift && button === 0 && cur) {
       const range = (a, b) => Array.from({ length: b - a }, (_, k) => a + k);
       let targets;
-      if (i < 36) {
+      if (i < 36 && this.chest) targets = range(400, 427);
+      else if (i < 36) {
         const def = ITEMS[cur.id];
         if (def.armor && !inv.armor[def.armor.slot]) targets = [200 + def.armor.slot];
         else if (this.furnace && SMELT[cur.id] !== undefined) targets = [300];
@@ -644,6 +655,7 @@ const UI = {
         c.n--; if (!c.n) Game.cursor = null;
       }
     }
+    if (this.chest && (i >= 400 || shift)) { this.chest.dirty = true; Game.chestChanged(this.chest); }
     inv.touch(); this.refreshInventory(); this.showTip(this.getS(i));
   },
   refreshRecipes() {

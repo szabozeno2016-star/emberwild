@@ -88,6 +88,17 @@ const GameAudio = {
   },
   place(id) { this.dig(id, 1.1); this.tone({ freq: 90, gain: 0.12, decay: 0.06, type: 'sine' }); },
   step(id) { const m = this.mat(id); this.dig(id, m === 'stone' ? 0.35 : 0.45); },
+  door(open) {
+    this.noise({ type: 'bandpass', freq: open ? 700 : 300, q: 2, gain: 0.25, decay: open ? 0.2 : 0.1, attack: 0.01 });
+    this.tone({ freq: open ? 240 : 140, to: open ? 320 : 90, gain: 0.1, decay: 0.14, type: 'triangle' });
+    if (!open) this.noise({ type: 'lowpass', freq: 500, gain: 0.35, decay: 0.07, delay: 0.06 });
+  },
+  chest(open) {
+    // creaky wooden lid
+    this.noise({ type: 'bandpass', freq: open ? 520 : 380, gain: 0.22, decay: open ? 0.28 : 0.18, attack: 0.02 });
+    this.tone({ freq: open ? 150 : 210, to: open ? 230 : 110, gain: 0.12, decay: open ? 0.3 : 0.16, type: 'triangle' });
+    if (!open) this.noise({ type: 'lowpass', freq: 600, gain: 0.3, decay: 0.08, delay: 0.12 });
+  },
   pop() { this.tone({ freq: 680 + Math.random() * 200, to: 1300, gain: 0.12, decay: 0.07 }); },
   click() { this.tone({ freq: 520, to: 380, gain: 0.14, decay: 0.06, type: 'triangle' }); this.noise({ freq: 2500, q: 2, gain: 0.08, decay: 0.03 }); },
   hover() { this.tone({ freq: 880, gain: 0.03, decay: 0.04, type: 'triangle' }); },
@@ -170,8 +181,8 @@ const GameAudio = {
     this.tone({ freq: 48, to: 32, gain: 0.25 - d * 0.1, attack: 0.05, decay: 2.2, delay: d * 1.5 });
   },
   hiss(v) { v = v || 0.5; this.noise({ type: 'highpass', freq: 3200, q: 0.8, gain: 0.12 * v, attack: 0.05, decay: 0.45, rate: 1.3 }); this.tone({ freq: 220, to: 150, gain: 0.04 * v, decay: 0.3, type: 'sawtooth' }); },
-  animal(v, hurt) {
-    v = v || 0.6; const f = hurt ? 190 : 105 + Math.random() * 25;
+  animal(v, hurt, pitch) {
+    v = v || 0.6; const f = (hurt ? 190 : 105 + Math.random() * 25) * (pitch || 1);
     this.tone({ freq: f, to: f * 0.8, gain: 0.12 * v, attack: 0.08, decay: hurt ? 0.25 : 0.7, type: 'sawtooth' });
     this.tone({ freq: f * 2.01, to: f * 1.6, gain: 0.04 * v, attack: 0.08, decay: hurt ? 0.2 : 0.6, type: 'triangle' });
   },

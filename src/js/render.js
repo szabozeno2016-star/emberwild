@@ -27,7 +27,7 @@ in vec3 vUVL; in float vShade; in float vSky; in float vBlk; in float vDist; in 
 uniform vec3 uCamF;
 uniform sampler2DArray uTex; uniform sampler2DArray uTexA; uniform float uAniso;
 uniform float uDay; uniform vec3 uSunCol; uniform vec3 uFog; uniform vec2 uFogR; uniform float uAlpha;
-uniform float uWater; uniform float uTime; uniform vec4 uTint; uniform float uCutoff; uniform float uFlick; uniform float uFastLeaves; uniform float uFancyWater;
+uniform float uWater; uniform float uTime; uniform vec4 uTint; uniform float uCutoff; uniform float uFlick; uniform float uFastLeaves; uniform float uFancyWater; uniform vec3 uBiome[32];
 out vec4 o;
 float curve(float x){ return x / (3.0 - 2.0 * x); }
 void main(){
@@ -46,6 +46,11 @@ void main(){
   } else t = texture(uTex, uvl);
   if (uFastLeaves > 0.5 && (vFlags & 2) != 0) t.a = 1.0;
   if (t.a < uCutoff) discard;
+  int ti = (vFlags >> 3) & 31;
+  if (ti > 0 && uWater < 0.5) {   // biome colour: only the green parts of grass, leaves and plants
+    float gw = clamp((t.g - max(t.r, t.b)) * 6.0, 0.0, 1.0);
+    t.rgb = mix(t.rgb, clamp(t.rgb * uBiome[ti], 0.0, 1.0), gw);
+  }
   float sky = curve(clamp(vSky, 0.0, 1.0));
   float blk = pow(clamp(vBlk, 0.0, 1.0), 1.7) * 1.3 * uFlick;
   vec3 L = max(sky * uDay * uSunCol, blk * vec3(1.0, 0.76, 0.48));
@@ -56,7 +61,7 @@ void main(){
   float a = t.a * uAlpha;
   if (uWater > 0.5) {
     float depth = clamp(vShade, 0.0, 1.0);
-    c = t.rgb * L * mix(1.05, 0.7, depth);
+    c = t.rgb * vec3(0.52, 0.72, 1.12) * L * mix(1.08, 0.66, depth);
     vec3 vd = normalize(uCamF - vPos);
     float fres = uFancyWater > 0.5 ? pow(1.0 - clamp(abs(vd.y), 0.0, 1.0), 4.0) : 0.0;
     c = mix(c, uFog * max(L.g, 0.25) * 1.05, fres * 0.55);
@@ -160,7 +165,7 @@ function initRenderer(canvas, atlasImg) {
   R.progMain = compile(gl, VS_MAIN, FS_MAIN);
   R.progSky = compile(gl, VS_SKY, FS_SKY);
   R.progLine = compile(gl, VS_LINE, FS_LINE);
-  R.uMain = uniforms(gl, R.progMain, ['uTexA', 'uAniso', 'uWave', 'uFastLeaves', 'uFancyWater', 'uFlick', 'uVP', 'uCam', 'uCamF', 'uTime', 'uTex', 'uDay', 'uSunCol', 'uFog', 'uFogR', 'uAlpha', 'uWater', 'uTint', 'uCutoff']);
+  R.uMain = uniforms(gl, R.progMain, ['uBiome', 'uTexA', 'uAniso', 'uWave', 'uFastLeaves', 'uFancyWater', 'uFlick', 'uVP', 'uCam', 'uCamF', 'uTime', 'uTex', 'uDay', 'uSunCol', 'uFog', 'uFogR', 'uAlpha', 'uWater', 'uTint', 'uCutoff']);
   R.uSky = uniforms(gl, R.progSky, ['uInv', 'uSun', 'uZen', 'uHor', 'uGlow', 'uNight', 'uTime', 'uSunset', 'uRain']);
   R.uLine = uniforms(gl, R.progLine, ['uVP', 'uCol']);
 
@@ -546,7 +551,7 @@ function skyState(t, rain, flash) {
   const el = sun[1];
   const day = smoothstep(-0.18, 0.22, el);
   const sunset = Math.exp(-Math.pow(el / 0.2, 2)) ;
-  const zenDay = [0.33, 0.56, 0.92], horDay = [0.66, 0.80, 0.97];
+  const zenDay = [0.40, 0.62, 1.0], horDay = [0.70, 0.83, 1.0];
   const zenNight = [0.02, 0.03, 0.08], horNight = [0.06, 0.08, 0.16];
   const horSet = [1.0, 0.52, 0.28], zenSet = [0.32, 0.30, 0.56];
   let zen = mix3(zenNight, zenDay, day), hor = mix3(horNight, horDay, day);
@@ -555,7 +560,7 @@ function skyState(t, rain, flash) {
   const glow = [1.0, 0.62, 0.3];
   const dayLight = lerp(0.3, 1.0, day);
   const sunCol = mix3([0.55, 0.66, 1.0], mix3([1, 1, 1], [1.0, 0.8, 0.62], sunset * 0.8), day);
-  let fog = mix3(hor, zen, 0.18);
+  let fog = mix3(hor, zen, 0.06);
   let dl = dayLight, sc = sunCol;
   if (rain > 0) {
     const grey = [0.46 * (0.15 + day * 0.85), 0.49 * (0.15 + day * 0.85), 0.54 * (0.18 + day * 0.82)];

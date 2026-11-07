@@ -75,17 +75,19 @@ class Chunk {
 }
 
 class World {
-  constructor(seed) {
+  constructor(seed, gen) {
     this.seed = seed | 0;
+    this.gen = gen === 1 ? 1 : 2;
     this.chunks = new Map();
     this.edits = new Map();   // ckey -> Map(localIndex -> blockId): every change made after generation
-    this.editVer = 0; this.onEdit = null;
+    this.editVer = 0; this.onEdit = null; this.chests = new Map();
     this.nV1 = makeValue3D(this.seed ^ 0x5151); this.nV2 = makeValue3D(this.seed ^ 0x6262); this.nV3 = makeValue3D(this.seed ^ 0x7373);
     this.nEnt = makeNoise2D(this.seed ^ 0xabcd);
     const s = this.seed;
     this.nC = makeNoise2D(s ^ 0x1234); this.nH = makeNoise2D(s ^ 0x2345); this.nD = makeNoise2D(s ^ 0x3456);
     this.nM = makeNoise2D(s ^ 0x4567); this.nMM = makeNoise2D(s ^ 0x5678); this.nF = makeNoise2D(s ^ 0x6789);
     this.nT = makeNoise2D(s ^ 0x789a); this.nP = makeNoise2D(s ^ 0x89ab); this.nS = makeNoise2D(s ^ 0x9abc);
+    if (this.gen === 2) this.initGen2();
   }
   getChunk(cx, cz) { return this.chunks.get(ckey(cx, cz)); }
   getBlock(x, y, z) {
@@ -128,7 +130,8 @@ class World {
   }
 
   // ---------------- terrain ----------------
-  column(x, z) {
+  column(x, z) { return this.gen === 1 ? this.column1(x, z) : this.column2(x, z); }
+  column1(x, z) {
     const cont = fbm(this.nC, x / 520, z / 520, 3) + 0.18;
     const hills = fbm(this.nH, x / 130, z / 130, 4);
     const det = this.nD(x / 28, z / 28);
@@ -157,7 +160,8 @@ class World {
     const hgt = type === 'pine' ? 6 + Math.floor(ihash(tx, tz, s + 4) * 4) : type === 'birch' ? 5 + Math.floor(ihash(tx, tz, s + 4) * 3) : 4 + Math.floor(ihash(tx, tz, s + 4) * 3);
     return { x: tx, z: tz, y: col.h + 1, type, hgt };
   }
-  generate(c) {
+  generate(c) { return this.gen === 1 ? this.generate1(c) : this.generate2(c); }
+  generate1(c) {
     const ox = c.cx * 16, oz = c.cz * 16, d = c.data, s = this.seed;
     const cols = new Array(256);
     for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
@@ -335,15 +339,39 @@ class World {
       }
     }
   }
-  encodeEdits() { return encodeEditMap(this.edits); }
-  loadEdits(str) { this.edits = decodeEditMap(str); this.editVer++; }
+  // block edits (base64), then chest contents as JSON after a '|' (base64 never contains one)
+  encodeEdits() {
+    const e = encodeEditMap(this.edits), c = [];
+    for (const ch of this.chests.values()) { const s = encodeSlots(ch.s); if (s.length) c.push([ch.x, ch.y, ch.z, ch.v | 0, s]); }
+    return c.length ? e + '|' + JSON.stringify(c) : e;
+  }
+  loadEdits(str) {
+    str = String(str || ''); const cut = str.indexOf('|');
+    this.edits = decodeEditMap(cut < 0 ? str : str.slice(0, cut)); this.chests = new Map();
+    if (cut >= 0) try {
+      for (const c of JSON.parse(str.slice(cut + 1))) if (Array.isArray(c)) {
+        const ch = this.chestAt(c[0] | 0, c[1] | 0, c[2] | 0, true); ch.v = c[3] | 0; ch.s = decodeSlots(c[4], 27);
+      }
+    } catch (e) { }
+    this.editVer++;
+  }
+  chestAt(x, y, z, create) {
+    const k = x + ',' + y + ',' + z; let c = this.chests.get(k);
+    if (!c && create) { c = { x, y, z, v: 0, s: new Array(27).fill(null) }; this.chests.set(k, c); }
+    return c || null;
+  }
   // find a dry spawn column near origin
   findSpawn() {
-    for (let r = 0; r < 400; r += 4) {
+    // gen 2: flat, friendly ground first (temperate grassland or woods), then anything that isn't water or a cliff
+    const passes = this.gen === 1 ? [[null, 400, 99]] : [[[BIOME.PLAINS, BIOME.FOREST, BIOME.BIRCH], 260, 2],
+      [[BIOME.PLAINS, BIOME.FOREST, BIOME.BIRCH, BIOME.TAIGA, BIOME.SAVANNA, BIOME.SNOWY, BIOME.DARK, BIOME.DESERT], 400, 3]];
+    for (const [ok, maxR, flat] of passes) for (let r = 0; r < maxR; r += 4) {
       for (let a = 0; a < 16; a++) {
         const x = Math.round(Math.cos(a / 16 * Math.PI * 2) * r), z = Math.round(Math.sin(a / 16 * Math.PI * 2) * r);
         const col = this.column(x, z);
-        if (col.h > SEA + 2 && col.h < SEA + 20) return [x + 0.5, col.h + 1, z + 0.5];
+        if (!(col.h > SEA + 2 && col.h < SEA + 20 && (!ok || ok.includes(col.biome)))) continue;
+        if (flat < 99 && [[2, 0], [-2, 0], [0, 2], [0, -2]].some(([dx, dz]) => Math.abs(this.column(x + dx, z + dz).h - col.h) > flat)) continue;
+        return [x + 0.5, col.h + 1, z + 0.5];
       }
     }
     return [0.5, this.column(0, 0).h + 1, 0.5];
@@ -539,7 +567,7 @@ function meshChunk(world, c) {
         let rot = 0;
         if (f === 2 && (id === B.GRASS || id === B.SAND || id === B.DIRT || id === B.STONE)) rot = (ihash(wx, wz, s + 5) * 4) | 0;
         const flip = (aoL[0] + skL[0] * 2 + aoL[2] + skL[2] * 2) < (aoL[1] + skL[1] * 2 + aoL[3] + skL[3] * 2);
-        const flags = isLeaf ? 4 : 0;
+        const flags = (isLeaf ? 4 : 0) + (TINTED[id] && c.tint ? c.tint[lx | (lz << 4)] * 16 : 0);
         buf.grow(36);
         for (let q = 0; q < 4; q++) {
           const k = flip ? (q + 1) & 3 : q;
@@ -553,7 +581,7 @@ function meshChunk(world, c) {
       const jx = (ihash(wx, wz, s + 8) - 0.5) * 0.3, jz = (ihash(wz, wx, s + 8) - 0.5) * 0.3;
       const cx0 = wx + 0.5 + jx, cz0 = wz + 0.5 + jz, e = 0.43;
       const hgt = id === B.TALLGRASS ? 0.8 + ihash(wx, wz, 3) * 0.25 : 1;
-      const wave = (id === B.TALLGRASS || id === B.REED || (id >= B.FLOWER_EMBER && id <= B.FLOWER_FROST)) ? 2 : 0, em = EMIT[id] ? 8 : 0;
+      const wave = (id === B.TALLGRASS || id === B.REED || id === B.DEAD_BUSH || (id >= B.FLOWER_EMBER && id <= B.FLOWER_FROST)) ? 2 : 0, em = (EMIT[id] ? 8 : 0) + (TINTED[id] && c.tint ? c.tint[lx | (lz << 4)] * 16 : 0);
       CU.grow(72);
       for (const [ax, az] of [[1, 1], [1, -1]]) {
         const x0 = cx0 - ax * e, z0 = cz0 - az * e, x1 = cx0 + ax * e, z1 = cz0 + az * e;
@@ -587,6 +615,18 @@ function meshChunk(world, c) {
       emitTorch(CU, id, wx, y, wz, rSky[idx] / 15, 1);
     } else if (rt === RT_CAMPFIRE) {
       emitCampfire(CU, wx, y, wz, rSky[idx] / 15, rBlk[idx] / 15);
+    } else if (rt === RT_DOOR) {
+      // the half with a door below it is the top half
+      const k = id - B.DOOR, side = (k & 1) ? ((k >> 1) + 1) & 3 : k >> 1, t = 3 / 16;
+      const L = isDoor(rB[idx - RC]) ? TEX.door_top : TEX.door_bottom;
+      const bx = DOOR_BOX[side], full = [0, 0, 1, 1], thin = [0, 0, t, 1];
+      const uv = side & 1 ? [full, full, thin, thin, thin, thin] : [thin, thin, [0, 0, 1, t], [0, 0, 1, t], full, full];
+      emitBox(CU, wx + bx[0], y, wz + bx[1], wx + bx[2], y + 1, wz + bx[3], L, uv, 1, rSky[idx] / 15, rBlk[idx] / 15, 0, null);
+    } else if (rt === RT_LADDER) {
+      const k = id - B.LADDER, e = 1 / 16, d = 0.02;
+      const bx = k === 0 ? [d, 0, d + e, 1] : k === 1 ? [1 - d - e, 0, 1 - d, 1] : k === 2 ? [0, d, 1, d + e] : [0, 1 - d - e, 1, 1 - d];
+      const T_ = TEX.ladder, layers = k < 2 ? [T_, T_, -1, -1, -1, -1] : [-1, -1, -1, -1, T_, T_];
+      emitBox(CU, wx + bx[0], y, wz + bx[1], wx + bx[2], y + 1, wz + bx[3], layers, [0, 0, 1, 1], 1, rSky[idx] / 15, rBlk[idx] / 15, 0, null);
     } else if (rt === RT_BED) {
       const ft = FACE_TEX[id];
       emitBox(CU, wx, y, wz, wx + 1, y + 0.56, wz + 1, ft, [[0, 0.44, 1, 1], [0, 0.44, 1, 1], [0, 0, 1, 1], [0, 0, 1, 1], [0, 0.44, 1, 1], [0, 0.44, 1, 1]], 1, Math.max(rSky[idx], rSky[idx + RC]) / 15, Math.max(rBlk[idx], rBlk[idx + RC]) / 15, 0, null);
@@ -595,6 +635,8 @@ function meshChunk(world, c) {
   return { opaque: O, cutout: CU, water: W };
 }
 
+// door panel footprint per side: [x0, z0, x1, z1]
+const DOOR_BOX = [[0, 0, 1, 3 / 16], [13 / 16, 0, 1, 1], [0, 13 / 16, 1, 1], [0, 0, 3 / 16, 1]];
 // generic textured box, optional transform fn(p)->p ; uvr = [u0,v0,u1,v1] per face or single
 function emitBox(buf, x0, y0, z0, x1, y1, z1, layers, uvr, shadeMul, sky, blk, flags, xf) {
   for (let f = 0; f < 6; f++) {

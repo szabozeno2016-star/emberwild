@@ -259,11 +259,28 @@ class Gloomling {
     this.wanderT = 0; this.wanderYaw = this.yaw; this.dead = false; this.growlT = 2 + Math.random() * 6; this.swing = 0;
   }
 }
+// passive animals: one behaviour, different bodies
+const ANIMALS = {
+  moss: { code: 1, hw: 0.42, h: 1.25, hp: 8, w: 0.5, hh: 1.3, voice: 1.0, drops: [[I.RAW_HAUNCH, 1, 2], [I.HIDE, 0.8, 2]] },
+  sheep: { code: 3, hw: 0.42, h: 1.25, hp: 8, w: 0.48, hh: 1.3, voice: 1.25, drops: [[B.WOOL, 1, 1], [I.RAW_HAUNCH, 1, 2]] },
+  cow: { code: 4, hw: 0.45, h: 1.4, hp: 10, w: 0.5, hh: 1.45, voice: 0.72, drops: [[I.RAW_HAUNCH, 1, 3], [I.HIDE, 0.9, 2]] },
+  pig: { code: 5, hw: 0.45, h: 0.9, hp: 10, w: 0.5, hh: 0.95, voice: 1.4, drops: [[I.RAW_HAUNCH, 1, 3]] },
+  hen: { code: 6, hw: 0.25, h: 0.7, hp: 4, w: 0.3, hh: 0.75, voice: 2.2, drops: [[I.RAW_HAUNCH, 1, 1], [I.SILK, 0.5, 1]] },
+};
+const ANIMAL_TEX = {
+  get moss() { return { body: TEX.moss_back }; },
+  get sheep() { return { body: TEX.sheep_wool, face: TEX.sheep_face, skin: TEX.sheep_skin }; },
+  get cow() { return { body: TEX.cow_hide, face: TEX.cow_face, horn: TEX.birch_top }; },
+  get pig() { return { body: TEX.pig_skin, face: TEX.pig_face, snout: TEX.pig_skin }; },
+  get hen() { return { body: TEX.hen_body, face: TEX.hen_face, leg: TEX.camp_log }; },
+};
+const ANIMAL_BY_CODE = Object.fromEntries(Object.entries(ANIMALS).map(([k, v]) => [v.code, k]));
 class Mossback {
-  constructor(x, y, z, id) {
-    this.type = 'moss'; this.id = id || MOB_ID++;
-    this.pos = [x, y, z]; this.tpos = [x, y, z]; this.vel = [0, 0, 0]; this.hw = 0.42; this.h = 1.25;
-    this.yaw = Math.random() * 6.28; this.onGround = false; this.health = 8; this.hurt = 0; this.walk = 0;
+  constructor(x, y, z, id, kind) {
+    kind = kind || 'moss'; const A = ANIMALS[kind];
+    this.type = kind; this.animal = true; this.id = id || MOB_ID++;
+    this.pos = [x, y, z]; this.tpos = [x, y, z]; this.vel = [0, 0, 0]; this.hw = A.hw; this.h = A.h;
+    this.yaw = Math.random() * 6.28; this.onGround = false; this.health = A.hp; this.hurt = 0; this.walk = 0;
     this.wanderT = Math.random() * 3; this.mode = 'idle'; this.graze = 0; this.fleeT = 0; this.fleeFrom = null; this.callT = 4 + Math.random() * 12; this.swing = 0;
   }
 }
@@ -281,9 +298,9 @@ const Mobs = {
   mirror(flat) {
     const seen = new Set();
     for (let i = 0; i + 8 < flat.length; i += 9) {
-      const id = flat[i] | 0, moss = flat[i + 1] === 1, crawl = flat[i + 1] === 2; seen.add(id);
+      const id = flat[i] | 0, kind = ANIMAL_BY_CODE[flat[i + 1]], moss = !!kind, crawl = flat[i + 1] === 2; seen.add(id);
       let m = this.list.find(x => x.id === id);
-      if (!m) { const C = moss ? Mossback : crawl ? Crawler : Gloomling; m = new C(flat[i + 2], flat[i + 3], flat[i + 4], id); m.pos = [+flat[i + 2] || 0, +flat[i + 3] || 0, +flat[i + 4] || 0]; this.list.push(m); }
+      if (!m) { m = moss ? new Mossback(flat[i + 2], flat[i + 3], flat[i + 4], id, kind) : new (crawl ? Crawler : Gloomling)(flat[i + 2], flat[i + 3], flat[i + 4], id); m.pos = [+flat[i + 2] || 0, +flat[i + 3] || 0, +flat[i + 4] || 0]; this.list.push(m); }
       m.tpos = [+flat[i + 2] || 0, +flat[i + 3] || 0, +flat[i + 4] || 0]; m.yaw = +flat[i + 5] || 0;
       if (flat[i + 6]) m.hurt = Math.max(m.hurt, 0.2);
       m.walk = +flat[i + 7] || 0;
@@ -293,7 +310,7 @@ const Mobs = {
       const m = this.list[i];
       if (!seen.has(m.id)) {
         Particles.burst(m.pos[0], m.pos[1] + 1, m.pos[2], TEX.smoke, 16, { full: true, size: 0.2, grav: -1.5, speed: 2, life: 0.8, drag: 2, grow: 0.25 });
-        if (m.myHit && performance.now() - m.myHit < 1500 && !m.dropped && (m.type !== 'gloom' || Math.random() < 0.65)) Drops.spawn(m.type === 'moss' ? I.RAW_HAUNCH : m.type === 'crawl' ? I.SILK : I.COAL, 1, undefined, m.pos[0], m.pos[1] + 1, m.pos[2]);
+        if (m.myHit && performance.now() - m.myHit < 1500 && !m.dropped && (m.type !== 'gloom' || Math.random() < 0.65)) Drops.spawn(m.animal ? ANIMALS[m.type].drops[0][0] : m.type === 'crawl' ? I.SILK : I.COAL, 1, undefined, m.pos[0], m.pos[1] + 1, m.pos[2]);
         this.list.splice(i, 1);
       }
     }
@@ -355,28 +372,37 @@ const Mobs = {
         }
       }
     }
-    // grazing herds in daylight
+    // grazing herds in daylight: sheep, cows, pigs and hens on grassland, Mossbacks in the cold and the hills
     this.animalT -= dt;
     if (this.animalT <= 0 && targets.length) {
-      this.animalT = 3;
-      const herd = this.list.filter(m => m.type === 'moss');
-      if (game.sky.day > 0.5 && herd.length < 7) {
+      this.animalT = 2.5;
+      const herd = this.list.filter(m => m.animal);
+      if (game.sky.day > 0.4 && herd.length < 12) {
         const tp = targets[(Math.random() * targets.length) | 0].pos;
-        const a = Math.random() * Math.PI * 2, r = 24 + Math.random() * 20;
+        const a = Math.random() * Math.PI * 2, r = 24 + Math.random() * 22;
         const x = Math.floor(tp[0] + Math.cos(a) * r), z = Math.floor(tp[2] + Math.sin(a) * r);
         const h = world.isLoaded(x, z) ? world.skyHeight(x, z) : -1;
-        if (h > SEA && world.getBlock(x, h, z) === B.GRASS && !herd.some(m => Math.hypot(m.pos[0] - x, m.pos[2] - z) < 24)) {
-          const n = 2 + ((Math.random() * 2) | 0);
+        const ground = h > 0 ? world.getBlock(x, h, z) : 0;
+        if (h > SEA && (ground === B.GRASS || ground === B.SNOW_GRASS) && !herd.some(m => Math.hypot(m.pos[0] - x, m.pos[2] - z) < 20)) {
+          const bio = world.biomeAt(x, z);
+          let kinds = ['moss'];
+          if (bio !== null) {
+            if (bio === BIOME.PLAINS || bio === BIOME.SAVANNA) kinds = ['sheep', 'cow', 'pig', 'hen', 'sheep', 'cow'];
+            else if (bio === BIOME.FOREST || bio === BIOME.BIRCH || bio === BIOME.DARK || bio === BIOME.SWAMP) kinds = ['pig', 'hen', 'sheep', 'cow'];
+            else if (bio === BIOME.TAIGA || bio === BIOME.SNOWY || bio === BIOME.SNOWY_TAIGA || bio === BIOME.MOUNTAIN) kinds = ['moss', 'sheep', 'moss'];
+          } else kinds = ['moss', 'sheep', 'cow', 'pig', 'hen'];
+          const kind = kinds[(Math.random() * kinds.length) | 0];
+          const n = kind === 'hen' ? 3 + ((Math.random() * 2) | 0) : 2 + ((Math.random() * 3) | 0);
           for (let k = 0; k < n; k++) {
-            const sx = x + ((Math.random() * 5) | 0) - 2, sz = z + ((Math.random() * 5) | 0) - 2, sh = world.skyHeight(sx, sz);
-            if (world.getBlock(sx, sh, sz) === B.GRASS && !solidAt(world, sx, sh + 1, sz)) this.list.push(new Mossback(sx + 0.5, sh + 1, sz + 0.5));
+            const sx = x + ((Math.random() * 5) | 0) - 2, sz = z + ((Math.random() * 5) | 0) - 2, sh = world.skyHeight(sx, sz), gb = world.getBlock(sx, sh, sz);
+            if ((gb === B.GRASS || gb === B.SNOW_GRASS) && !solidAt(world, sx, sh + 1, sz)) this.list.push(new Mossback(sx + 0.5, sh + 1, sz + 0.5, 0, kind));
           }
         }
       }
     }
     for (let i = this.list.length - 1; i >= 0; i--) {
       const m = this.list[i];
-      if (m.type === 'moss') { if (this.updateAnimal(world, m, dt, game, targets)) this.list.splice(i, 1); continue; }
+      if (m.animal) { if (this.updateAnimal(world, m, dt, game, targets)) this.list.splice(i, 1); continue; }
       if (m.type === 'crawl') { if (this.updateCrawler(world, m, dt, game, targets)) this.list.splice(i, 1); continue; }
       let tgt = null, best = 1e9;
       for (const t of targets) { const d = Math.hypot(t.pos[0] - m.pos[0], t.pos[2] - m.pos[2]); if (d < best) { best = d; tgt = t; } }
@@ -443,9 +469,9 @@ const Mobs = {
     if (m.health <= 0 || near > 110) {
       if (m.health <= 0) {
         Particles.burst(m.pos[0], m.pos[1] + 0.8, m.pos[2], TEX.smoke, 14, { full: true, size: 0.16, grav: -1.2, speed: 1.6, life: 0.7, drag: 2, grow: 0.2 });
-        Particles.burst(m.pos[0], m.pos[1] + 0.9, m.pos[2], TEX.moss_back, 10, { speed: 2.4 });
-        if (m.byPlayer) { Drops.spawn(I.RAW_HAUNCH, 1 + (Math.random() < 0.5 ? 1 : 0), undefined, m.pos[0], m.pos[1] + 0.8, m.pos[2]); if (Math.random() < 0.8) Drops.spawn(I.HIDE, 1 + (Math.random() < 0.35 ? 1 : 0), undefined, m.pos[0], m.pos[1] + 0.8, m.pos[2]); }
-        game.audio.animal(0.8, true);
+        Particles.burst(m.pos[0], m.pos[1] + 0.9 * m.h, m.pos[2], ANIMAL_TEX[m.type].body, 10, { speed: 2.4 });
+        if (m.byPlayer) for (const [id, chance, max] of ANIMALS[m.type].drops) if (Math.random() < chance) Drops.spawn(id, 1 + ((Math.random() * max) | 0) % max, undefined, m.pos[0], m.pos[1] + 0.6, m.pos[2]);
+        game.audio.animal(0.8, true, ANIMALS[m.type].voice);
       }
       return true;
     }
@@ -480,7 +506,7 @@ const Mobs = {
     if ((res.x || res.z) && m.onGround && speed > 0) m.vel[1] = 7.5;
     m.walk += Math.hypot(m.vel[0], m.vel[2]) * dt * 2.6;
     m.callT -= dt;
-    if (m.callT <= 0) { m.callT = 8 + Math.random() * 16; if (near < 16) game.audio.animal(clamp(1 - near / 16, 0.15, 1)); }
+    if (m.callT <= 0) { m.callT = 8 + Math.random() * 16; if (near < 16) game.audio.animal(clamp(1 - near / 16, 0.15, 1), false, ANIMALS[m.type].voice); }
     return false;
   },
   updateCrawler(world, m, dt, game, targets) {
@@ -522,15 +548,49 @@ const Mobs = {
     m.walk += Math.hypot(m.vel[0], m.vel[2]) * dt * 4;
     return false;
   },
-  onHit(m, from) { if (m.type === 'moss') { m.fleeT = 5; m.fleeFrom = from.slice(); m.mode = 'walk'; GameAudio.animal(0.9, true); } },
+  onHit(m, from) { if (m.animal) { m.fleeT = 5; m.fleeFrom = from.slice(); m.mode = 'walk'; GameAudio.animal(0.9, true, ANIMALS[m.type].voice); } },
   hitTest(o, d, maxDist) {
     let best = null, bt = maxDist;
     for (const m of this.list) {
-      const w = m.type === 'moss' ? 0.5 : m.type === 'crawl' ? 0.55 : 0.4, hh = m.type === 'moss' ? 1.3 : m.type === 'crawl' ? 0.8 : 2.0;
+      const w = m.animal ? ANIMALS[m.type].w : m.type === 'crawl' ? 0.55 : 0.4, hh = m.animal ? ANIMALS[m.type].hh : m.type === 'crawl' ? 0.8 : 2.0;
       const t = rayAABB(o, d, m.pos[0] - w, m.pos[1], m.pos[2] - w, m.pos[0] + w, m.pos[1] + hh, m.pos[2] + w);
       if (t >= 0 && t < bt) { bt = t; best = m; }
     }
     return best ? { mob: best, t: bt } : null;
+  },
+  /** blocky farm animals — original designs */
+  renderFarm(m, base, box, time, sw) {
+    const T = ANIMAL_TEX[m.type], b = T.body, f = T.face, s = T.skin;
+    const head = (x, y, z, rx) => { const h = M4.create(); h.set(base); M4.translate(h, x, y, z); M4.rotX(h, rx); return h; };
+    const leg = (lx, ly, lz, ph, w, len, tex) => {
+      const l = M4.create(); l.set(base); M4.translate(l, lx, ly, lz); M4.rotX(l, sw * ph * 0.8);
+      box(l, -w, -len, -w, w, 0, w, tex);
+    };
+    const graze = -m.graze * 0.9 + Math.sin(time * 1.3 + m.id) * 0.04;
+    if (m.type === 'sheep') {
+      for (const [lx, lz, ph] of [[-0.2, -0.32, 1], [0.2, -0.32, -1], [-0.2, 0.32, -1], [0.2, 0.32, 1]]) leg(lx, 0.48, lz, ph, 0.09, 0.48, s);
+      box(base, -0.36, 0.44, -0.52, 0.36, 1.06, 0.52, b);
+      const h = head(0, 0.9, -0.5, graze);
+      box(h, -0.2, -0.24, -0.4, 0.2, 0.16, 0.02, [b, b, b, b, b, f]);
+    } else if (m.type === 'cow') {
+      for (const [lx, lz, ph] of [[-0.22, -0.38, 1], [0.22, -0.38, -1], [-0.22, 0.38, -1], [0.22, 0.38, 1]]) leg(lx, 0.6, lz, ph, 0.11, 0.6, b);
+      box(base, -0.38, 0.56, -0.58, 0.38, 1.18, 0.58, b);
+      const h = head(0, 1.1, -0.58, graze);
+      box(h, -0.25, -0.3, -0.36, 0.25, 0.2, 0.02, [b, b, b, b, b, f]);
+      box(h, -0.33, 0.12, -0.22, -0.25, 0.26, -0.14, T.horn); box(h, 0.25, 0.12, -0.22, 0.33, 0.26, -0.14, T.horn);
+    } else if (m.type === 'pig') {
+      for (const [lx, lz, ph] of [[-0.2, -0.3, 1], [0.2, -0.3, -1], [-0.2, 0.3, -1], [0.2, 0.3, 1]]) leg(lx, 0.32, lz, ph, 0.1, 0.32, b);
+      box(base, -0.33, 0.3, -0.48, 0.33, 0.82, 0.48, b);
+      const h = head(0, 0.62, -0.46, graze * 0.6);
+      box(h, -0.26, -0.24, -0.46, 0.26, 0.26, 0.02, [b, b, b, b, b, f]);
+      box(h, -0.12, -0.14, -0.53, 0.12, 0.02, -0.46, T.snout);
+    } else if (m.type === 'hen') {
+      for (const side of [-1, 1]) { const l = M4.create(); l.set(base); M4.translate(l, side * 0.08, 0.26, 0.02); M4.rotX(l, sw * side); box(l, -0.03, -0.26, -0.03, 0.03, 0, 0.03, T.leg); }
+      box(base, -0.18, 0.24, -0.22, 0.18, 0.58, 0.22, b);
+      for (const side of [-1, 1]) { const w = M4.create(); w.set(base); M4.translate(w, side * 0.2, 0.52, 0); M4.rotZ(w, side * (0.05 + Math.abs(Math.sin(time * 9 + m.id)) * (m.fleeT > 0 ? 0.6 : 0))); box(w, side > 0 ? -0.02 : -0.04, -0.26, -0.16, side > 0 ? 0.04 : 0.02, 0, 0.16, b); }
+      const h = head(0, 0.56, -0.18, graze * 0.8 + Math.sin(time * 6 + m.id) * 0.05);
+      box(h, -0.12, 0, -0.18, 0.12, 0.3, 0.02, [b, b, b, b, b, f]);
+    }
   },
   render(world, time) {
     const gl = R.gl;
@@ -558,6 +618,12 @@ const Mobs = {
           M4.rotY(l, side * (0.25 - k * 0.25)); M4.rotZ(l, side * (0.7 + Math.sin(m.walk * 2 + k * 2.1 + (side > 0 ? 0 : 3.14)) * 0.25));
           box(l, side > 0 ? 0 : -0.62, -0.04, -0.04, side > 0 ? 0.62 : 0, 0.04, 0.04, Sk);
         }
+        gl.uniform4f(R.uMain.uTint, 0.85, 0.1, 0.1, m.hurt > 0 ? 0.45 : 0);
+        flushDyn();
+        continue;
+      }
+      if (m.animal && m.type !== 'moss') {
+        this.renderFarm(m, base, box, time, sw);
         gl.uniform4f(R.uMain.uTint, 0.85, 0.1, 0.1, m.hurt > 0 ? 0.45 : 0);
         flushDyn();
         continue;

@@ -122,6 +122,8 @@ const B = {
   FLOWER_EMBER: 26, FLOWER_SUN: 27, FLOWER_FROST: 28, BERRY_BUSH: 29, ORE_COAL: 30, ORE_SUNVEIN: 31, ORE_EMBER: 32,
   ORE_AZURITE: 33, ORE_SKYSHARD: 34, ORE_VERDITE: 35, TORCH_W0: 36, TORCH_W1: 37, TORCH_W2: 38, TORCH_W3: 39,
   SNOW: 40, GLOWCAP: 41, MUSHROOM_RED: 42, MUSHROOM_BROWN: 43, REED: 44, CAMPFIRE: 45, FURNACE: 46, FURNACE_LIT: 47, BED: 48,
+  SANDSTONE: 49, GRAVEL: 50, CLAY: 51, CACTUS: 52, DEAD_BUSH: 53, SNOW_GRASS: 54, CHEST: 55, WOOL: 56, CHEST_E: 57, CHEST_W: 58, CHEST_N: 59,
+  DOOR: 60, /* 60-67: side * 2 + open */ LADDER: 68, /* 68-71: which wall it hangs on */
 };
 const I = {
   STICK: 100, COAL: 101, SUNVEIN: 102, EMBER_DUST: 103, AZURITE: 104, SKYSHARD: 105, VERDITE: 106, APPLE: 107, BERRIES: 108,
@@ -131,7 +133,7 @@ const I = {
   WOOD_PICK: 110, STONE_PICK: 111, WOOD_AXE: 112, STONE_AXE: 113, WOOD_SHOVEL: 114, STONE_SHOVEL: 115, WOOD_SWORD: 116, STONE_SWORD: 117,
 };
 // render types
-const RT_NONE = 0, RT_CUBE = 1, RT_CROSS = 2, RT_LIQUID = 3, RT_TORCH = 4, RT_CAMPFIRE = 5, RT_BED = 6;
+const RT_NONE = 0, RT_CUBE = 1, RT_CROSS = 2, RT_LIQUID = 3, RT_TORCH = 4, RT_CAMPFIRE = 5, RT_BED = 6, RT_DOOR = 7, RT_LADDER = 8;
 const BLOCKS = [];
 const OPAQUE = new Uint8Array(256), SOLID = new Uint8Array(256), SKYBLOCK = new Uint8Array(256), LIGHTPASS = new Uint8Array(256),
   AOCAST = new Uint8Array(256), RTYPE = new Uint8Array(256), EMIT = new Uint8Array(256), CUTOUT = new Uint8Array(256),
@@ -152,7 +154,7 @@ function defBlock(id, name, o) {
   let t = o.tex || {};
   if (typeof t === 'string') t = { all: t };
   const side = t.side || t.all, top = t.top || t.all, bottom = t.bottom || t.all;
-  FACE_TEX[id] = [side, side, top, bottom, side, side].map(n => n ? TEX[n] : 0);
+  FACE_TEX[id] = (t.faces || [side, side, top, bottom, side, side]).map(n => n ? TEX[n] : 0);
   if (!d.noItem) {
     ITEMS[id] = { id, name, icon: o.icon || top || side, stack: o.stack || 64, block: id, desc: d.desc, iso: d.rtype === RT_CUBE };
   }
@@ -213,12 +215,48 @@ defBlock(B.FURNACE, 'Furnace', { tex: { top: 'furnace_top', bottom: 'furnace_top
 defBlock(B.FURNACE_LIT, 'Furnace', { tex: { top: 'furnace_top', bottom: 'furnace_top', side: 'furnace_front_lit' }, hard: 3, tool: 'pick', tier: 1, light: 12, noItem: true, drop: one(B.FURNACE) });
 defBlock(B.BED, 'Bed', { tex: { top: 'bed_top', side: 'bed_side', bottom: 'oak_planks' }, opaque: false, cutout: true, rtype: RT_BED, hard: 0.6, tool: 'axe', sound: 'wood',
   desc: 'Sleep through the night and wake up here when you fall.' });
+defBlock(B.SANDSTONE, 'Sandstone', { tex: { top: 'sandstone_top', bottom: 'sandstone_top', side: 'sandstone_side' }, hard: 0.8, tool: 'pick', tier: 1 });
+defBlock(B.GRAVEL, 'Gravel', { tex: 'gravel', hard: 0.6, tool: 'shovel', sound: 'sand' });
+defBlock(B.CLAY, 'Clay', { tex: 'clay', hard: 0.6, tool: 'shovel', sound: 'sand' });
+defBlock(B.CACTUS, 'Cactus', { tex: { top: 'cactus_top', bottom: 'cactus_top', side: 'cactus_side' }, hard: 0.4, sound: 'leaves', anyGround: true, desc: 'Prickly! Grows on sand in deserts.' });
+defBlock(B.DEAD_BUSH, 'Dead Bush', plant('', 'dead_bush', { replaceable: true, anyGround: true, drop: (r) => r() < 0.5 ? [[I.STICK, 1]] : [] }));
+defBlock(B.SNOW_GRASS, 'Snowy Grass Block', { tex: { top: 'snow', side: 'snow_grass_side', bottom: 'dirt' }, hard: 0.6, tool: 'shovel', sound: 'sand', drop: one(B.DIRT) });
+defBlock(B.CHEST, 'Chest', { tex: { faces: ['chest_side', 'chest_side', 'chest_top', 'chest_top', 'chest_front', 'chest_side'] }, icon: 'chest_front', hard: 2.5, tool: 'axe', sound: 'wood', desc: 'Stores 27 stacks of items. Right-click to open.' });
+// doors: a thin panel on one side of the block (0 north, 1 east, 2 south, 3 west); open doors swing to the next side and let you through
+for (let f = 0; f < 4; f++) for (let o = 0; o < 2; o++) defBlock(B.DOOR + f * 2 + o, 'Wooden Door', { tex: { top: 'door_top', side: 'door_bottom' }, icon: 'door_item', opaque: false, solid: !o, cutout: true, rtype: RT_DOOR,
+  hard: 1.5, tool: 'axe', sound: 'wood', noItem: !!(f || o), drop: one(B.DOOR), desc: 'Right-click to open and close it. Needs two blocks of space.' });
+// ladders hang on a wall: 0 wall to the west, 1 east, 2 north, 3 south (same as wall torches)
+for (let k = 0; k < 4; k++) defBlock(B.LADDER + k, 'Ladder', { tex: 'ladder', opaque: false, solid: false, cutout: true, rtype: RT_LADDER, hard: 0.4, tool: 'axe', sound: 'wood',
+  noItem: k > 0, drop: one(B.LADDER), desc: 'Place it against a wall, then walk into it to climb. Sneak to hold on.' });
+// the same chest turned to face east, west and north (the latch faces whoever placed it)
+[[B.CHEST_E, 0], [B.CHEST_W, 1], [B.CHEST_N, 5]].forEach(([cid, f]) => {
+  const faces = ['chest_side', 'chest_side', 'chest_top', 'chest_top', 'chest_side', 'chest_side']; faces[f] = 'chest_front';
+  defBlock(cid, 'Chest', { tex: { faces }, hard: 2.5, tool: 'axe', sound: 'wood', noItem: true, drop: one(B.CHEST) });
+});
+defBlock(B.WOOL, 'Wool', { tex: 'wool', hard: 0.8, sound: 'leaves', desc: 'Soft and warm. Good for beds and building.' });
 // leaves drop themselves
 for (const id of [B.OAK_LEAVES, B.BIRCH_LEAVES, B.PINE_LEAVES]) {
   const f = BLOCKS[id].drop; BLOCKS[id].drop = (r) => f(r).map(([i, n]) => [i === -1 ? id : i, n]);
 }
 ITEMS[B.WATER] = { id: B.WATER, name: 'Water', icon: 'water', stack: 64, block: B.WATER, desc: 'Creative only. Still water you can place anywhere.', creative: true };
 const isTorch = id => id === B.TORCH || (id >= B.TORCH_W0 && id <= B.TORCH_W3);
+const isChest = id => id === B.CHEST || (id >= B.CHEST_E && id <= B.CHEST_N);
+const isDoor = id => id >= B.DOOR && id < B.DOOR + 8;
+const isLadder = id => id >= B.LADDER && id < B.LADDER + 4;
+// chest contents travel as a flat list: slot, item, count, durability (-1 = none)
+function encodeSlots(s) { const o = []; s.forEach((st, i) => { if (st) o.push(i, st.id, st.n, st.d === undefined ? -1 : st.d); }); return o; }
+function decodeSlots(a, size) {
+  const s = new Array(size).fill(null); if (!Array.isArray(a)) return s;
+  for (let i = 0; i + 3 < a.length; i += 4) {
+    const k = a[i] | 0, id = a[i + 1] | 0, n = a[i + 2] | 0, d = +a[i + 3];
+    if (k < 0 || k >= size || !ITEMS[id] || n < 1) continue;
+    const st = { id, n: Math.min(n, ITEMS[id].stack) };
+    const dur = ITEMS[id].tool ? ITEMS[id].tool.dur : ITEMS[id].armor ? ITEMS[id].armor.dur : 0;
+    if (dur && isFinite(d) && d >= 0) st.d = Math.min(d, dur); else if (ITEMS[id].tool) st.d = dur;
+    s[k] = st;
+  }
+  return s;
+}
 const isPlant = id => RTYPE[id] === RT_CROSS;
 const isLeaves = id => id === B.OAK_LEAVES || id === B.BIRCH_LEAVES || id === B.PINE_LEAVES;
 
@@ -287,6 +325,10 @@ const RECIPES = [
   { out: [B.FURNACE, 1], inp: [[B.COBBLE, 8]], bench: true, cat: 'Basics' },
   { out: [B.BED, 1], inp: [['planks', 3], [I.HIDE, 3]], bench: true, cat: 'Basics' },
   { out: [B.BED, 1], inp: [['planks', 3], [I.SILK, 3]], bench: true, cat: 'Basics' },
+  { out: [B.BED, 1], inp: [['planks', 3], [B.WOOL, 3]], bench: true, cat: 'Basics' },
+  { out: [B.CHEST, 1], inp: [['planks', 8]], bench: true, cat: 'Basics' },
+  { out: [B.DOOR, 3], inp: [['planks', 6]], bench: true, cat: 'Basics' },
+  { out: [B.LADDER, 3], inp: [[I.STICK, 7]], bench: true, cat: 'Basics' },
   { out: [I.WOOD_PICK, 1], inp: [['planks', 3], [I.STICK, 2]], bench: true, cat: 'Tools' },
   { out: [I.WOOD_AXE, 1], inp: [['planks', 3], [I.STICK, 2]], bench: true, cat: 'Tools' },
   { out: [I.WOOD_SHOVEL, 1], inp: [['planks', 1], [I.STICK, 2]], bench: true, cat: 'Tools' },
@@ -303,20 +345,22 @@ const RECIPES = [
   { out: [B.MOSSY, 1], inp: [[B.COBBLE, 1], ['leaves', 1]], cat: 'Building' },
   { out: [B.MOSSY_BRICKS, 1], inp: [[B.BRICKS, 1], ['leaves', 1]], cat: 'Building' },
   { out: [B.EMBER_PLANKS, 4], inp: [['planks', 4], [I.EMBER_DUST, 1]], bench: true, cat: 'Building' },
+  { out: [B.SANDSTONE, 1], inp: [[B.SAND, 4]], cat: 'Building' },
+  { out: [B.WOOL, 1], inp: [[I.SILK, 4]], cat: 'Building' },
 ];
 
 // ---------- creative catalog ----------
 const CREATIVE_TABS = {
   Building: [B.STONE, B.COBBLE, B.MOSSY, B.BRICKS, B.MOSSY_BRICKS, B.BASALT, B.BEDROCK, B.OAK_PLANKS, B.BIRCH_PLANKS, B.PINE_PLANKS, B.EMBER_PLANKS,
-    B.OAK_LOG, B.BIRCH_LOG, B.PINE_LOG, B.GLASS, B.SAND, B.DIRT, B.GRASS, B.SNOW, B.BENCH, B.FURNACE, B.BED, B.TORCH, B.CAMPFIRE, B.WATER],
+    B.OAK_LOG, B.BIRCH_LOG, B.PINE_LOG, B.GLASS, B.SAND, B.SANDSTONE, B.GRAVEL, B.CLAY, B.WOOL, B.DIRT, B.GRASS, B.SNOW, B.BENCH, B.CHEST, B.DOOR, B.LADDER, B.FURNACE, B.BED, B.TORCH, B.CAMPFIRE, B.WATER],
   Nature: [B.GRASS, B.DIRT, B.SAND, B.OAK_LOG, B.BIRCH_LOG, B.PINE_LOG, B.OAK_LEAVES, B.BIRCH_LEAVES, B.PINE_LEAVES, B.TALLGRASS,
-    B.FLOWER_EMBER, B.FLOWER_SUN, B.FLOWER_FROST, B.BERRY_BUSH, B.MUSHROOM_RED, B.MUSHROOM_BROWN, B.GLOWCAP, B.REED, B.SNOW, B.WATER],
+    B.FLOWER_EMBER, B.FLOWER_SUN, B.FLOWER_FROST, B.BERRY_BUSH, B.MUSHROOM_RED, B.MUSHROOM_BROWN, B.GLOWCAP, B.REED, B.SNOW, B.SNOW_GRASS, B.CACTUS, B.DEAD_BUSH, B.GRAVEL, B.CLAY, B.WATER],
   Ores: [B.ORE_COAL, B.ORE_SUNVEIN, B.ORE_EMBER, B.ORE_AZURITE, B.ORE_SKYSHARD, B.ORE_VERDITE, I.COAL, I.SUNVEIN, I.EMBER_DUST, I.AZURITE, I.SKYSHARD, I.VERDITE],
   Items: [I.WOOD_PICK, I.STONE_PICK, I.SUNVEIN_PICK, I.SKY_PICK, I.WOOD_AXE, I.STONE_AXE, I.SUNVEIN_AXE, I.SKY_AXE, I.WOOD_SHOVEL, I.STONE_SHOVEL, I.SUNVEIN_SHOVEL, I.SKY_SHOVEL,
     I.WOOD_SWORD, I.STONE_SWORD, I.SUNVEIN_SWORD, I.SKY_SWORD, ...Array.from({ length: 12 }, (_, i) => I.ARMOR0 + i), I.STICK, I.CHARCOAL, I.SUNVEIN_INGOT, I.HIDE, I.SILK, I.APPLE, I.BERRIES, I.RAW_HAUNCH, I.ROAST_HAUNCH, B.TORCH, B.CAMPFIRE],
 };
 CREATIVE_TABS.All = [...new Set([].concat(CREATIVE_TABS.Building, CREATIVE_TABS.Nature, CREATIVE_TABS.Ores, CREATIVE_TABS.Items))];
-const CREATIVE_START = [B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.OAK_PLANKS, B.OAK_LOG, B.GLASS, B.BRICKS, B.TORCH];
+const CREATIVE_START = [B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.OAK_PLANKS, B.OAK_LOG, B.GLASS, B.CHEST, B.TORCH];
 
 // ---------- settings ----------
 const DEFAULT_SETTINGS = {

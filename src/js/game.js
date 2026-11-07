@@ -128,7 +128,7 @@ const Game = {
     const P = this.player;
     const inv = []; this.inv.s.forEach((st, i) => { if (st) inv.push([i, st.id, st.n, st.d === undefined ? -1 : st.d]); });
     return {
-      v: 2, id: this.worldId, name: this.worldName, seed: this.world.seed, seedLabel: String(this.seedLabel), mode: this.mode, diff: Settings.difficulty,
+      v: 2, gen: this.world.gen, id: this.worldId, name: this.worldName, seed: this.world.seed, seedLabel: String(this.seedLabel), mode: this.mode, diff: Settings.difficulty,
       time: this.time, day: this.day, created: this.created || Date.now(), savedAt: Date.now(), edits: this.world.encodeEdits(),
       player: { pos: P.pos.map(r2), yaw: r2(P.yaw), pitch: r2(P.pitch), health: P.alive ? P.health : 20, hunger: P.hunger, sat: P.sat, spawn: P.spawn.map(r2), flying: !!P.flying, inv, sel: this.inv.sel,
         armor: this.inv.armor.map(st => st ? [st.id, st.d === undefined ? -1 : st.d] : null) },
@@ -148,7 +148,7 @@ const Game = {
     this.disposeWorld(this.menuWorld); this.menuWorld = null;
     this.disposeWorld(this.world);
     Settings.difficulty = clamp(data.diff | 0, 0, 3);
-    this.world = new World(data.seed | 0);
+    this.world = new World(data.seed | 0, data.gen === 2 ? 2 : 1);
     this.world.loadEdits(data.edits || '');
     this.worldId = data.id; this.worldName = data.name || 'World'; this.seedLabel = data.seedLabel || String(data.seed); this.created = data.created;
     this.mode = data.mode === 'creative' ? 'creative' : 'survival';
@@ -195,7 +195,7 @@ const Game = {
     this.disposeWorld(this.menuWorld); this.menuWorld = null;
     this.disposeWorld(this.world);
     Settings.difficulty = srv.mode === 'creative' ? 0 : 2;
-    this.world = new World(seedFromString(srv.seed));
+    this.world = new World(seedFromString(srv.seed), srv.gen === 2 ? 2 : 1);
     this.world.loadEdits(st.edits || '');
     this.worldId = null; this.server = srv; this.worldName = srv.name; this.seedLabel = srv.seed; this.created = Date.now();
     this.mode = srv.mode === 'creative' ? 'creative' : 'survival';
@@ -282,7 +282,7 @@ const Game = {
     this.disposeWorld(this.world);
     const pm = r.pm;
     Settings.difficulty = clamp(pm.diff | 0, 0, 3);
-    this.world = new World(pm.seed | 0);
+    this.world = new World(pm.seed | 0, pm.gen === 2 ? 2 : 1);
     this.world.loadEdits(r.edits);
     this.worldId = null; this.worldName = (String(pm.name || 'Party world').slice(0, 32)) + ' (party)'; this.seedLabel = pm.sl || String(pm.seed);
     this.mode = pm.mode === 'creative' ? 'creative' : 'survival';
@@ -399,6 +399,8 @@ const Game = {
   breakBlock(x, y, z) {
     const w = this.world, id = w.getBlock(x, y, z);
     const can = this.canHarvest(id);
+    if (isChest(id)) this.spillChest(x, y, z);
+    if (isDoor(id)) { if (isDoor(w.getBlock(x, y + 1, z))) w.setBlock(x, y + 1, z, 0); if (isDoor(w.getBlock(x, y - 1, z))) w.setBlock(x, y - 1, z, 0); }
     w.setBlock(x, y, z, 0);
     GameAudio.breakBlock(id);
     const layer = FACE_TEX[id][id === B.GRASS ? 2 : 0];
@@ -428,8 +430,10 @@ const Game = {
     };
     const above = w.getBlock(x, y + 1, z);
     if (isPlant(above) || above === B.TORCH) pop(x, y + 1, z);
+    if (isDoor(above) && !isDoor(w.getBlock(x, y, z))) { if (isDoor(w.getBlock(x, y + 2, z))) w.setBlock(x, y + 2, z, 0, remote); pop(x, y + 1, z); }
     const sides = [[1, 0, B.TORCH_W0], [-1, 0, B.TORCH_W1], [0, 1, B.TORCH_W2], [0, -1, B.TORCH_W3]];
     for (const [dx, dz, tid] of sides) if (w.getBlock(x + dx, y, z + dz) === tid) pop(x + dx, y, z + dz);
+    if (!OPAQUE[w.getBlock(x, y, z)]) sides.forEach(([dx, dz], k) => { if (w.getBlock(x + dx, y, z + dz) === B.LADDER + k) pop(x + dx, y, z + dz); });
   },
   tryPlace(hit) {
     const w = this.world, P = this.player, st = this.inv.held;
@@ -442,6 +446,31 @@ const Game = {
     const cur = w.getBlock(px, py, pz);
     if (cur && !REPLACEABLE[cur]) return false;
     let id = def.block;
+    if (id === B.LADDER) {
+      // clicking a ladder extends it up (or down when looking down)
+      if (isLadder(hit.id)) {
+        const step = this.lookDir()[1] < -0.35 ? -1 : 1;
+        let yy = hit.y; while (isLadder(w.getBlock(hit.x, yy, hit.z)) && Math.abs(yy - hit.y) < 64) yy += step;
+        const k = hit.id - B.LADDER, sup = [[-1, 0], [1, 0], [0, -1], [0, 1]][k];
+        if (w.getBlock(hit.x, yy, hit.z) !== 0 && !REPLACEABLE[w.getBlock(hit.x, yy, hit.z)]) return false;
+        if (!OPAQUE[w.getBlock(hit.x + sup[0], yy, hit.z + sup[1])] || yy < 1 || yy >= WH - 1) return false;
+        px = hit.x; py = yy; pz = hit.z; id = hit.id;
+      } else {
+        const n = hit.n;
+        if (n[1] !== 0 || (px === hit.x && py === hit.y && pz === hit.z)) return false;
+        if (!OPAQUE[w.getBlock(px - n[0], py, pz - n[2])] || cur === B.WATER) return false;
+        id = n[0] === 1 ? B.LADDER : n[0] === -1 ? B.LADDER + 1 : n[2] === 1 ? B.LADDER + 2 : B.LADDER + 3;
+      }
+    }
+    if (id === B.DOOR) {
+      const up = w.getBlock(px, py + 1, pz);
+      if ((up && !REPLACEABLE[up]) || up === B.WATER || cur === B.WATER || !OPAQUE[w.getBlock(px, py - 1, pz)] || py + 1 >= WH - 1) return false;
+      const dx = P.pos[0] - (px + 0.5), dz = P.pos[2] - (pz + 0.5);
+      const side = Math.abs(dz) >= Math.abs(dx) ? (dz < 0 ? 0 : 2) : (dx > 0 ? 1 : 3);
+      id = B.DOOR + side * 2;
+      const hw = P.hw;
+      if (px + 1 > P.pos[0] - hw && px < P.pos[0] + hw && pz + 1 > P.pos[2] - hw && pz < P.pos[2] + hw && py + 2 > P.pos[1] && py < P.pos[1] + P.h) return false;
+    }
     if (id === B.TORCH) {
       const n = (px === hit.x && py === hit.y && pz === hit.z) ? [0, 1, 0] : hit.n;
       const support = [px - n[0], py - n[1], pz - n[2]];
@@ -457,12 +486,19 @@ const Game = {
       if (cur === B.WATER) return false;
     }
     if (id === B.CAMPFIRE && (!OPAQUE[w.getBlock(px, py - 1, pz)] || cur === B.WATER)) return false;
+    if (id === B.CHEST) {
+      // the latch faces whoever places it
+      const dx = P.pos[0] - (px + 0.5), dz = P.pos[2] - (pz + 0.5);
+      id = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? B.CHEST_E : B.CHEST_W) : (dz > 0 ? B.CHEST : B.CHEST_N);
+      w.chests.delete(px + ',' + py + ',' + pz);
+    }
     if (SOLID[id]) {
       const hw = P.hw;
       if (px + 1 > P.pos[0] - hw && px < P.pos[0] + hw && pz + 1 > P.pos[2] - hw && pz < P.pos[2] + hw && py + 1 > P.pos[1] && py < P.pos[1] + P.h) return false;
       for (const m of Mobs.list) if (px + 1 > m.pos[0] - 0.3 && px < m.pos[0] + 0.3 && pz + 1 > m.pos[2] - 0.3 && pz < m.pos[2] + 0.3 && py + 1 > m.pos[1] && py < m.pos[1] + 1.9) return false;
     }
     w.setBlock(px, py, pz, id);
+    if (isDoor(id)) w.setBlock(px, py + 1, pz, id);
     GameAudio.place(id);
     if (!this.creative) { st.n--; if (!st.n) this.inv.s[this.inv.sel] = null; }
     this.inv.touch();
@@ -477,6 +513,46 @@ const Game = {
     Mobs.list.forEach(x => { if (m === 'creative') x.wanderT = 0; });
     this.inv.touch(); UI.lastHearts = UI.lastFood = '';
   },
+  /* ---------- doors ---------- */
+  toggleDoor(x, y, z) {
+    const w = this.world, id = w.getBlock(x, y, z); if (!isDoor(id)) return;
+    const y0 = isDoor(w.getBlock(x, y - 1, z)) ? y - 1 : y, nid = id ^ 1;
+    // a closing door can't shut on someone standing in the doorway
+    if (!((nid - B.DOOR) & 1)) {
+      const P = this.player, hw = P.hw;
+      if (x + 1 > P.pos[0] - hw && x < P.pos[0] + hw && z + 1 > P.pos[2] - hw && z < P.pos[2] + hw && y0 + 2 > P.pos[1] && y0 < P.pos[1] + P.h) { GameAudio.tone({ freq: 160, gain: 0.06, decay: 0.08, type: 'square' }); return; }
+    }
+    for (const yy of [y0, y0 + 1]) if (isDoor(w.getBlock(x, yy, z))) w.setBlock(x, yy, z, nid);
+    GameAudio.door((nid - B.DOOR) & 1);
+  },
+
+  /* ---------- chests ---------- */
+  spillChest(x, y, z) {
+    const w = this.world, c = w.chestAt(x, y, z);
+    if (!c) return;
+    for (const st of c.s) if (st) Drops.spawn(st.id, st.n, st.d, x + 0.5, y + 0.5, z + 0.5, [(Math.random() - 0.5) * 3, 2 + Math.random() * 2, (Math.random() - 0.5) * 3]);
+    c.s.fill(null); this.chestChanged(c);
+    w.chests.delete(x + ',' + y + ',' + z);
+    if (UI.chest === c) UI.closeInventory();
+  },
+  chestChanged(c) {
+    c.v = (c.v | 0) + 1; this.world.editVer++;
+    if (Net.active) Net.chestEdit(c);
+  },
+  chestClosed(c) { },
+  applyRemoteChest(x, y, z, v, slots) {
+    const w = this.world; if (!w) return;
+    const c = w.chestAt(x, y, z, true);
+    if (v <= c.v) return;
+    c.v = v; c.s = decodeSlots(slots, 27); w.editVer++;
+    if (UI.chest === c) { UI.refreshInventory(); }
+  },
+  checkOpenChest() {
+    const c = UI.chest; if (!c) return;
+    const P = this.player, gone = !isChest(this.world.getBlock(c.x, c.y, c.z));
+    if (gone || !P.alive || Math.hypot(P.pos[0] - c.x - 0.5, P.pos[1] + 1 - c.y - 0.5, P.pos[2] - c.z - 0.5) > 8) UI.closeInventory();
+  },
+
   /* ---------- furnaces ---------- */
   furnaces: new Map(),
   furnaceAt(x, y, z, create) {
@@ -515,7 +591,7 @@ const Game = {
     P.spawn = [x + 0.5, y + 1, z + 0.5];
     if (Net.active) { UI.toast('Spawn point set. Sleeping through the night is off in parties.'); return; }
     if (this.sky.night < 0.5) { UI.toast('Spawn point set. You can only sleep at night.'); return; }
-    if (!this.creative && Mobs.list.some(m => m.type !== 'moss' && Math.hypot(m.pos[0] - P.pos[0], m.pos[2] - P.pos[2]) < 10)) { UI.toast('You can’t sleep with creatures nearby!'); return; }
+    if (!this.creative && Mobs.list.some(m => !m.animal && Math.hypot(m.pos[0] - P.pos[0], m.pos[2] - P.pos[2]) < 10)) { UI.toast('You can’t sleep with creatures nearby!'); return; }
     UI.sleep(() => {
       this.time = Math.floor(this.time + 0.3) + 0.02;
       this.sky = skyState(this.time % 1, Atmos.rain, 0);
@@ -569,7 +645,7 @@ const Game = {
     for (let s = 0; s < 4; s++) { const st = this.inv.armor[s]; if (st) { Drops.spawn(st.id, 1, st.d, P.pos[0], P.pos[1] + 1, P.pos[2], [(Math.random() - 0.5) * 6, 3 + Math.random() * 3, (Math.random() - 0.5) * 6]); this.inv.armor[s] = null; } }
     this.inv.touch();
     GameAudio.death();
-    const msgs = { crawler: 'You were bitten by a Duskcrawler.', fire: 'You stood too close to the campfire.', fall: 'You fell from a high place.', gloom: 'You were caught by a Gloomling.', starve: 'You starved.', drown: 'You drowned.', void: 'You fell out of the world.' };
+    const msgs = { crawler: 'You were bitten by a Duskcrawler.', fire: 'You stood too close to the campfire.', fall: 'You fell from a high place.', cactus: 'You hugged a cactus.', gloom: 'You were caught by a Gloomling.', starve: 'You starved.', drown: 'You drowned.', void: 'You fell out of the world.' };
     UI.showDeath(msgs[cause] || 'You perished.');
   },
   respawn() {
@@ -598,7 +674,7 @@ const Game = {
     }
     if (P.alive) this.updatePlayer(dt);
     Atmos.update(dt, this);
-    this.updateFurnaces(dt);
+    this.updateFurnaces(dt); this.checkOpenChest();
     Mobs.update(w, dt, this);
     Drops.update(w, dt, P.alive ? P : null, d => {
       const before = d.n;
@@ -663,6 +739,18 @@ const Game = {
     const feet = w.getBlock(Math.floor(P.pos[0]), Math.floor(P.pos[1] + 0.3), Math.floor(P.pos[2]));
     const wasInWater = P.inWater;
     P.inWater = feet === B.WATER;
+    { const lx = Math.floor(P.pos[0]), lz = Math.floor(P.pos[2]); P.onLadder = !P.flying && !P.inWater && (isLadder(feet) || isLadder(w.getBlock(lx, Math.floor(P.pos[1] + 1.2), lz)) || isLadder(w.getBlock(lx, Math.floor(P.pos[1]), lz))); }
+    // pushed out if a block (a closing door, someone else's build) ends up inside us
+    if (aabbHitsSolid(w, P.pos[0] - P.hw, P.pos[1] + 0.05, P.pos[2] - P.hw, P.pos[0] + P.hw, P.pos[1] + P.h - 0.05, P.pos[2] + P.hw)) {
+      let done = false;
+      for (const s of [0.15, 0.3, 0.5, 0.7]) {
+        for (const [ox, oz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = P.pos[0] + ox * s, nz = P.pos[2] + oz * s;
+          if (!aabbHitsSolid(w, nx - P.hw, P.pos[1] + 0.05, nz - P.hw, nx + P.hw, P.pos[1] + P.h - 0.05, nz + P.hw)) { P.pos[0] = nx; P.pos[2] = nz; done = true; break; }
+        }
+        if (done) break;
+      }
+    }
     const eye = this.eyePos();
     P.headInWater = w.getBlock(Math.floor(eye[0]), Math.floor(eye[1]), Math.floor(eye[2])) === B.WATER;
     if (P.inWater && !wasInWater && P.vel[1] < -6) { GameAudio.splash(); Particles.burst(P.pos[0], P.pos[1] + 0.5, P.pos[2], TEX.water, 14, { full: false, speed: 3, up: 3 }); }
@@ -676,6 +764,16 @@ const Game = {
       P.vel[0] = lerp(P.vel[0], tx * 0.55, k); P.vel[2] = lerp(P.vel[2], tz * 0.55, k);
       if (jump) P.vel[1] = Math.min(P.vel[1] + 20 * dt, 3.4);
       else P.vel[1] = Math.max(P.vel[1] - 7 * dt, -2.4);
+    } else if (P.onLadder) {
+      // climb with forward or jump, hold on while sneaking, otherwise slide down slowly
+      const k = 1 - Math.exp(-12 * dt);
+      P.vel[0] = lerp(P.vel[0], tx * 0.8, k); P.vel[2] = lerp(P.vel[2], tz * 0.8, k);
+      if (jump || (fz > 0 && !uiBlock)) P.vel[1] = 3.4;
+      else if (P.sneak) P.vel[1] = 0;
+      else P.vel[1] = Math.max(P.vel[1] - 30 * dt, -2.6);
+      P.fallDist = 0;
+      P.climbAcc = (P.climbAcc || 0) + Math.abs(P.vel[1]) * dt;
+      if (P.climbAcc > 1.1) { P.climbAcc = 0; GameAudio.step(B.OAK_PLANKS); }
     } else {
       const acc = P.onGround ? 15 : 3.0;
       const k = 1 - Math.exp(-acc * dt);
@@ -770,7 +868,7 @@ const Game = {
         }
         const kx = m.pos[0] - P.pos[0], kz = m.pos[2] - P.pos[2], kl = Math.hypot(kx, kz) || 1;
         m.vel[0] += kx / kl * 7; m.vel[2] += kz / kl * 7; m.vel[1] = 5;
-        Mobs.onHit(m, P.pos); if (m.type !== 'moss') GameAudio.mobHurt(); P.attackCd = 0.4;
+        Mobs.onHit(m, P.pos); if (!m.animal) GameAudio.mobHurt(); P.attackCd = 0.4;
         if (hdef && hdef.tool) this.useTool(hdef.tool.type === 'sword' ? 1 : 2);
         this.addExh(0.1);
         P.breakProg = 0;
@@ -798,6 +896,8 @@ const Game = {
       const tgt = this.target;
       if (tgt && tgt.id === B.BENCH && !P.sneak && Input.pressR) { UI.openInventory(); Input.mouseR = false; }
       else if (tgt && (tgt.id === B.FURNACE || tgt.id === B.FURNACE_LIT) && !P.sneak && Input.pressR) { UI.openInventory(this.furnaceAt(tgt.x, tgt.y, tgt.z, true)); Input.mouseR = false; }
+      else if (tgt && isDoor(tgt.id) && !P.sneak && Input.pressR) { this.toggleDoor(tgt.x, tgt.y, tgt.z); Input.mouseR = false; P.swingT = 0; }
+      else if (tgt && isChest(tgt.id) && !P.sneak && Input.pressR) { UI.openInventory(null, this.world.chestAt(tgt.x, tgt.y, tgt.z, true)); Input.mouseR = false; P.swingT = 0; }
       else if (tgt && tgt.id === B.BED && !P.sneak && Input.pressR) { this.useBed(tgt.x, tgt.y, tgt.z); Input.mouseR = false; }
       else if (hdef && hdef.armor && Input.pressR) {
         const sl = hdef.armor.slot, old = this.inv.armor[sl];
@@ -827,6 +927,15 @@ const Game = {
     Input.pressL = Input.pressR = false;
 
     // ---- survival ----
+    // cactus pricks anyone brushing against it
+    if (!this.creative) {
+      const e = 0.06, hw = P.hw + e; let prick = false;
+      for (let yy = Math.floor(P.pos[1] - e); yy <= Math.floor(P.pos[1] + P.h) && !prick; yy++)
+        for (let zz = Math.floor(P.pos[2] - hw); zz <= Math.floor(P.pos[2] + hw) && !prick; zz++)
+          for (let xx = Math.floor(P.pos[0] - hw); xx <= Math.floor(P.pos[0] + hw); xx++) if (w.getBlock(xx, yy, zz) === B.CACTUS) { prick = true; break; }
+      P.cactusT = prick ? (P.cactusT || 0) - dt : 0;
+      if (prick && P.cactusT <= 0) { P.cactusT = 0.5; this.damagePlayer(1, 'cactus'); }
+    }
     if (!this.creative && w.getBlock(Math.floor(P.pos[0]), Math.floor(P.pos[1] + 0.1), Math.floor(P.pos[2])) === B.CAMPFIRE) {
       P.fireT = (P.fireT || 0) + dt;
       if (P.fireT > 0.8) { P.fireT = 0; this.damagePlayer(1, 'fire'); }
@@ -890,8 +999,9 @@ const Game = {
     gl.uniform3fv(U.uCam, cam.eye); gl.uniform3fv(U.uCamF, cam.eye); gl.uniform1f(U.uTime, opts.time); gl.uniform1f(U.uFlick, Atmos.flick);
     gl.uniform1f(U.uDay, sky.dayLight); gl.uniform3fv(U.uSunCol, sky.sunCol); gl.uniform3fv(U.uFog, fogCol);
     gl.uniform1i(U.uTexA, 3); gl.uniform1f(U.uAniso, R.anisoOn ? 1 : 0);
+    gl.uniform3fv(U.uBiome, TINTS);
     gl.uniform1f(U.uWave, GFX.wave ? 1 : 0); gl.uniform1f(U.uFastLeaves, GFX.fastLeaves ? 1 : 0); gl.uniform1f(U.uFancyWater, GFX.fancyWater ? 1 : 0);
-    const fogFar = opts.underwater ? 22 : (radius * 16 - 2) * (1 - 0.35 * (sky.rain || 0)), fogNear = opts.underwater ? 1 : fogFar * 0.62;
+    const fogFar = opts.underwater ? 22 : (radius * 16 - 2) * (1 - 0.35 * (sky.rain || 0)), fogNear = opts.underwater ? 1 : fogFar * 0.72;
     gl.uniform2f(U.uFogR, fogNear, fogFar);
     gl.uniform1f(U.uAlpha, 1); gl.uniform1f(U.uWater, 0); gl.uniform4f(U.uTint, 0, 0, 0, 0); gl.uniform1f(U.uCutoff, 0.5);
     const planes = frustumPlanes(R.vp);
