@@ -2,9 +2,13 @@
    Skins: palettes, presets, texture generation, GPU slots, player model
    skin = [tone, hairColor, hairStyle, eyes, shirt, accent, pants, shoes, pattern]
    ===================================================================== */
-const SKIN_SLOTS = 8, SKIN_LAYERS = 12;
-const SKIN_BASE = TEX_COUNT, TEX_TOTAL = TEX_COUNT + SKIN_SLOTS * SKIN_LAYERS;
-if (TEX_TOTAL > 256) console.warn('texture layers exceed 256:', TEX_TOTAL);
+// player skins live after the block tiles in the texture array; devices with a small array limit get fewer skin slots
+let SKIN_SLOTS = 8, TEX_TOTAL = TEX_COUNT + 8 * 12;
+const SKIN_LAYERS = 12, SKIN_BASE = TEX_COUNT;
+function fitSkinSlots(maxLayers) {
+  SKIN_SLOTS = clamp(Math.floor(((maxLayers || 256) - TEX_COUNT) / SKIN_LAYERS), 1, 8);
+  TEX_TOTAL = TEX_COUNT + SKIN_SLOTS * SKIN_LAYERS;
+}
 const Skins = {
   TONES: ['#f3d2b7', '#e3b38f', '#c98f66', '#a46b45', '#7b4b2c', '#4f2f1d'],
   HAIRS: ['#1d1612', '#4b2d18', '#8b5a2b', '#d8b25b', '#b5461f', '#ece6da', '#6e6a78', '#2f6b4f'],
@@ -101,7 +105,7 @@ const Skins = {
   },
 
   /* ---- GPU slots ---- */
-  slotKey: new Array(SKIN_SLOTS).fill(null), slotUsed: new Array(SKIN_SLOTS).fill(0), useT: 0,
+  slotKey: new Array(8).fill(null), slotUsed: new Array(8).fill(0), useT: 0,
   base(s) {
     const k = this.key(s);
     let slot = this.slotKey.indexOf(k);
@@ -110,7 +114,8 @@ const Skins = {
       this.slotKey[slot] = k;
       const gl = R.gl, f = this.faces(s);
       gl.bindTexture(gl.TEXTURE_2D_ARRAY, R.tex);
-      f.forEach((d, i) => gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, SKIN_BASE + slot * SKIN_LAYERS + i, 16, 16, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(d.buffer)));
+      const hd = new Uint8Array(TILE * TILE * 4);
+      f.forEach((d, i) => { hdTile(new Uint8Array(d.buffer), 0, hd, 0, i + 7); gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, SKIN_BASE + slot * SKIN_LAYERS + i, TILE, TILE, 1, gl.RGBA, gl.UNSIGNED_BYTE, hd); });
       gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
     }
     this.slotUsed[slot] = ++this.useT;

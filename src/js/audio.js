@@ -88,6 +88,11 @@ const GameAudio = {
   },
   place(id) { this.dig(id, 1.1); this.tone({ freq: 90, gain: 0.12, decay: 0.06, type: 'sine' }); },
   step(id) { const m = this.mat(id); this.dig(id, m === 'stone' ? 0.35 : 0.45); },
+  gate() {
+    this.tone({ freq: 90, to: 520, gain: 0.16, decay: 1.2, type: 'sine' }); this.tone({ freq: 180, to: 1040, gain: 0.07, decay: 1.2, type: 'triangle', delay: 0.05 });
+    this.noise({ type: 'bandpass', freq: 900, q: 1.5, gain: 0.12, decay: 1.0, attack: 0.3 });
+  },
+  fanfare() { [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => this.tone({ freq: f, gain: 0.15, decay: 0.8, type: 'triangle', delay: i * 0.17 })); },
   door(open) {
     this.noise({ type: 'bandpass', freq: open ? 700 : 300, q: 2, gain: 0.25, decay: open ? 0.2 : 0.1, attack: 0.01 });
     this.tone({ freq: open ? 240 : 140, to: open ? 320 : 90, gain: 0.1, decay: 0.14, type: 'triangle' });

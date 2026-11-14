@@ -32,6 +32,7 @@ Object.assign(World.prototype, {
     this.g2 = {
       T: makeNoise2D(s ^ 0x1a2b), H: makeNoise2D(s ^ 0x2b3c), C: makeNoise2D(s ^ 0x3c4d), E: makeNoise2D(s ^ 0x4d5e),
       R: makeNoise2D(s ^ 0x5e6f), RV: makeNoise2D(s ^ 0x6f70), D: makeNoise2D(s ^ 0x7081), P: makeNoise2D(s ^ 0x8192), J: makeNoise2D(s ^ 0x92a3),
+      W: makeNoise2D(s ^ 0xa3b4),
     };
   },
   climate(x, z) {
@@ -75,6 +76,7 @@ Object.assign(World.prototype, {
     else if (T < -0.28) biome = BIOME.TAIGA;
     else if (T < 0.44) biome = Hm < -0.18 ? BIOME.PLAINS : Hm < 0.16 ? BIOME.FOREST : Hm < 0.42 ? BIOME.BIRCH : BIOME.DARK;
     else biome = Hm < -0.02 ? BIOME.DESERT : BIOME.SAVANNA;
+    if (this.gen >= 3) { const b3 = this.biome3(biome, x, z, T, Hm, h); biome = b3[0]; h = b3[1]; }
     return { h, biome, tint: 1 + biome, T, Hm, mtn, rs, forest: biome === BIOME.FOREST || biome === BIOME.DARK || biome === BIOME.BIRCH ? 0.5 : 0 };
   },
 
@@ -97,11 +99,21 @@ Object.assign(World.prototype, {
       case B_.SWAMP: p = 0.16; type = 'swamp'; break;
       case B_.MOUNTAIN: p = col.h < SEA + 50 ? 0.09 : 0; type = 'spruce'; break;
       case B_.DESERT: p = 0.06; type = 'cactus'; break;
+      case B_.JUNGLE: p = 0.72; type = r2 < 0.3 ? 'jungle' : r2 < 0.55 ? 'bigoak' : 'oak'; break;
+      case B_.BLOSSOM: p = 0.3; type = 'blossom'; break;
+      case B_.AUTUMN: p = 0.5; type = r2 < 0.55 ? 'autumn' : r2 < 0.8 ? 'birch' : 'oak'; break;
+      case B_.MEADOW: p = 0.008; type = r2 < 0.5 ? 'blossom' : 'oak'; break;
+      case B_.MUSHROOM: p = 0.1; type = 'gmush'; break;
+      case B_.ICE_SPIKES: p = 0.09; type = 'spike'; break;
+      case B_.PALM_BEACH: p = 0.14; type = 'palm'; break;
+      case B_.MESA: p = 0.02; type = 'cactus'; break;
+      case B_.ASHLANDS: p = 0.035; type = 'char'; break;
       default: p = 0;
     }
     if (r > p) return null;
     const hr = ihash(tx, tz, s + 904);
-    const hgt = { oak: 4 + (hr * 3 | 0), birch: 5 + (hr * 3 | 0), spruce: 7 + (hr * 4 | 0), bigoak: 9 + (hr * 4 | 0), acacia: 5 + (hr * 2 | 0), swamp: 4 + (hr * 3 | 0), cactus: 1 + (hr * 3 | 0) }[type];
+    const hgt = { oak: 4 + (hr * 3 | 0), birch: 5 + (hr * 3 | 0), spruce: 7 + (hr * 4 | 0), bigoak: 9 + (hr * 4 | 0), acacia: 5 + (hr * 2 | 0), swamp: 4 + (hr * 3 | 0), cactus: 1 + (hr * 3 | 0),
+      jungle: 11 + (hr * 7 | 0), blossom: 5 + (hr * 2 | 0), autumn: 5 + (hr * 3 | 0), gmush: 4 + (hr * 3 | 0), spike: 6 + (hr * hr * 18 | 0), palm: 5 + (hr * 3 | 0), char: 3 + (hr * 4 | 0) }[type];
     return { x: tx, z: tz, y: col.h + 1, type, hgt, biome: col.biome };
   },
 
@@ -122,7 +134,7 @@ Object.assign(World.prototype, {
       const hN = ring[(x + 1) + z * 18], hS = ring[(x + 1) + (z + 2) * 18], hW = ring[x + (z + 1) * 18], hE = ring[(x + 2) + (z + 1) * 18];
       const slope = Math.max(Math.abs(h - hN), Math.abs(h - hS), Math.abs(h - hW), Math.abs(h - hE));
       const n1 = ihash(wx, wz, s + 9);
-      let top = B.GRASS, fill = B.DIRT, depth = 3 + (n1 * 2 | 0), under = 0;
+      let top = B.GRASS, fill = B.DIRT, depth = 3 + (n1 * 2 | 0), under = 0, mesa = false;
       switch (col.biome) {
         case BIOME.OCEAN: top = fill = h < SEA - 9 ? (this.g2.D(wx / 18, wz / 18) > 0.25 ? B.CLAY : B.GRAVEL) : B.SAND; break;
         case BIOME.RIVER: top = fill = this.g2.D(wx / 12, wz / 12) > 0.3 ? B.GRAVEL : this.g2.D(wz / 15, wx / 15) > 0.45 ? B.CLAY : B.SAND; break;
@@ -136,6 +148,16 @@ Object.assign(World.prototype, {
           else if (this.g2.D(wx / 11, wz / 11) > 0.55) top = fill = B.GRAVEL;
           break;
         case BIOME.SAVANNA: if (slope >= 4) { top = fill = B.STONE; } break;
+        case BIOME.FROZEN_OCEAN: top = fill = B.GRAVEL; break;
+        case BIOME.PALM_BEACH: top = fill = B.SAND; depth = 4; under = B.SANDSTONE; break;
+        case BIOME.ICE_SPIKES: top = fill = B.SNOW; depth = 2; break;
+        case BIOME.MESA: mesa = true; break;
+        case BIOME.AUTUMN: if (this.g2.D(wx / 16 + 9, wz / 16) > 0.25) top = B.LOAM; if (slope >= 5) top = fill = B.STONE; break;
+        case BIOME.MUSHROOM: top = B.SPORE_SOIL; break;
+        case BIOME.ASHLANDS:
+          fill = B.BASALT; depth = 3;
+          top = slope === 0 && this.g2.D(wx / 13 - 9, wz / 13 + 4) < -0.56 ? B.LAVA : this.g2.D(wx / 9, wz / 9) > 0.42 ? B.MAGMA : this.g2.D(wx / 17 + 5, wz / 17) > 0.25 ? B.BASALT : B.ASH;
+          break;
         default: if (slope >= 5 && h > SEA + 6) { top = fill = B.STONE; }
       }
       if (h < SEA && (top === B.GRASS || top === B.SNOW_GRASS)) { top = B.DIRT; }
@@ -144,6 +166,7 @@ Object.assign(World.prototype, {
         let b;
         if (y === 0) b = B.BEDROCK;
         else if (y <= 2 && ihash(wx * 3 + y, wz, s) < 0.5) b = B.BEDROCK;
+        else if (mesa && y > h - 24 && y > SEA - 3) b = y === h && slope <= 1 ? B.RED_SAND : MESA_BANDS[(y + (ihash(wx >> 3, wz >> 3, s + 61) * 2 | 0)) % MESA_BANDS.length];
         else if (y === h) b = top;
         else if (y > h - depth) b = fill;
         else if (under && y > h - depth - 4) b = under;
@@ -152,6 +175,7 @@ Object.assign(World.prototype, {
         d[base | (y << 8)] = b;
       }
       for (let y = h + 1; y <= SEA; y++) d[base | (y << 8)] = B.WATER;
+      if (col.biome === BIOME.FROZEN_OCEAN && h < SEA && this.g2.D(wx / 23, wz / 23) > -0.3) d[base | (SEA << 8)] = B.ICE;
     }
     // ores
     const rnd = mulberry32(ihash(c.cx, c.cz, s + 77) * 4294967296 | 0);
@@ -207,10 +231,32 @@ Object.assign(World.prototype, {
         for (let k = 0; k < hgt; k++) put(x, y + k, z, B.CACTUS);
         continue;
       }
-      const log = type === 'spruce' ? B.PINE_LOG : type === 'birch' ? B.BIRCH_LOG : B.OAK_LOG;
-      const leaf = type === 'spruce' ? B.PINE_LEAVES : type === 'birch' ? B.BIRCH_LEAVES : B.OAK_LEAVES;
       const top = y + hgt - 1;
-      if (type === 'oak' || type === 'birch' || type === 'swamp') {
+      if (type === 'spike') {
+        // a tapering spire of ice
+        for (let k = -1; k < hgt; k++) { const rr = Math.round(2.3 * Math.pow(1 - Math.max(0, k) / hgt, 1.4)); for (let dz = -rr; dz <= rr; dz++) for (let dx = -rr; dx <= rr; dx++) if (dx * dx + dz * dz <= rr * rr + 1) put(x + dx, y + k, z + dz, B.ICE, true); }
+        continue;
+      }
+      if (type === 'gmush') {
+        for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) { if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue; put(x + dx, top, z + dz, B.MUSHROOM_CAP); if (Math.abs(dx) < 2 && Math.abs(dz) < 2) put(x + dx, top + 1, z + dz, B.MUSHROOM_CAP); }
+        for (let ly = y; ly < top; ly++) put(x, ly, z, B.MUSHROOM_STEM, true);
+        continue;
+      }
+      if (type === 'palm') {
+        for (let ly = y; ly <= top; ly++) put(x, ly, z, B.PALM_LOG, true);
+        put(x, top + 1, z, B.PALM_LEAVES);
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { put(x + dx, top + 1, z + dz, B.PALM_LEAVES); put(x + dx * 2, top + 1, z + dz * 2, B.PALM_LEAVES); put(x + dx * 3, top, z + dz * 3, B.PALM_LEAVES); }
+        for (const [dx, dz] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) { put(x + dx, top, z + dz, B.PALM_LEAVES); put(x + dx * 2, top - 1, z + dz * 2, B.PALM_LEAVES); }
+        continue;
+      }
+      if (type === 'char') {
+        for (let ly = y; ly <= top; ly++) put(x, ly, z, B.CHARWOOD_LOG, true);
+        if (hgt > 3) { const dd = [[1, 0], [-1, 0], [0, 1], [0, -1]][r(x, z, 5) * 4 | 0]; put(x + dd[0], top - 1, z + dd[1], B.CHARWOOD_LOG, true); }
+        continue;
+      }
+      const log = type === 'spruce' ? B.PINE_LOG : type === 'birch' || type === 'blossom' ? B.BIRCH_LOG : B.OAK_LOG;
+      const leaf = type === 'spruce' ? B.PINE_LEAVES : type === 'birch' ? B.BIRCH_LEAVES : type === 'blossom' ? B.BLOSSOM_LEAVES : type === 'autumn' ? B.AUTUMN_LEAVES : B.OAK_LEAVES;
+      if (type === 'oak' || type === 'birch' || type === 'swamp' || type === 'blossom' || type === 'autumn') {
         const wide = type === 'swamp' ? 3 : 2;
         for (let ly = top - 2; ly <= top + 1; ly++) {
           const rr = ly <= top - 1 ? wide : 1;
@@ -233,9 +279,9 @@ Object.assign(World.prototype, {
           }
         }
         for (let ly = y; ly <= top; ly++) put(x, ly, z, log, true);
-      } else if (type === 'bigoak') {
+      } else if (type === 'bigoak' || type === 'jungle') {
         for (let ly = y; ly <= top; ly++) put(x, ly, z, log, true);
-        blob(x, top + 1, z, 2.8, leaf, 1);
+        blob(x, top + 1, z, type === 'jungle' ? 3.4 : 2.8, leaf, 1);
         const nb = 2 + (r(x, z, 7) * 3 | 0);
         for (let b = 0; b < nb; b++) {
           const a = r(x, z, 20 + b) * Math.PI * 2, by = y + Math.floor(hgt * (0.5 + 0.35 * r(z, x, 30 + b)));
@@ -292,9 +338,17 @@ Object.assign(World.prototype, {
         case BIOME.DESERT: if (rr < 0.012 && topB === B.SAND) id = B.DEAD_BUSH; break;
         case BIOME.SWAMP: if (rr < 0.03) id = B.MUSHROOM_BROWN; else if (rr < 0.14) id = B.TALLGRASS; break;
         case BIOME.MOUNTAIN: if (topB === B.GRASS && rr < 0.08) id = B.TALLGRASS; break;
-        case BIOME.BEACH: if (topB === B.SAND && rr < 0.004) id = B.DEAD_BUSH; break;
+        case BIOME.BEACH: case BIOME.PALM_BEACH: if (topB === B.SAND && rr < 0.004) id = B.DEAD_BUSH; break;
+        case BIOME.JUNGLE: if (rr < 0.26) id = B.FERN; else if (rr < 0.4) id = B.TALLGRASS; else if (rr < 0.41) id = B.BERRY_BUSH; break;
+        case BIOME.BLOSSOM: if (rr < 0.1) id = ihash(wx, wz, s + 34) < 0.6 ? B.FLOWER_ROSE : B.FLOWER_VIOLET; else if (rr < 0.26) id = B.TALLGRASS; break;
+        case BIOME.AUTUMN: if (rr < 0.02) id = B.MUSHROOM_BROWN; else if (rr < 0.03) id = B.BERRY_BUSH; else if (rr < 0.14) id = B.TALLGRASS; else if (rr < 0.2) id = B.FERN; break;
+        case BIOME.MEADOW:
+          if (rr < 0.3) id = [B.FLOWER_SUN, B.FLOWER_EMBER, B.FLOWER_FROST, B.FLOWER_VIOLET, B.FLOWER_ROSE][(ihash(wx >> 2, wz >> 2, s + 35) * 5) | 0]; else if (rr < 0.56) id = B.TALLGRASS; break;
+        case BIOME.MUSHROOM: if (rr < 0.06) id = ihash(wx, wz, s + 33) < 0.5 ? B.MUSHROOM_RED : B.MUSHROOM_BROWN; else if (rr < 0.085) id = B.GLOWCAP; break;
+        case BIOME.MESA: if (rr < 0.01 && topB === B.RED_SAND) id = B.DEAD_BUSH; break;
+        case BIOME.ASHLANDS: if (rr < 0.015 && topB === B.ASH) id = B.DEAD_BUSH; break;
       }
-      if (id === B.DEAD_BUSH || topB === B.GRASS) { if (id) d[base | ((h + 1) << 8)] = id; }
+      if (id === B.DEAD_BUSH || topB === B.GRASS || topB === B.SPORE_SOIL || topB === B.LOAM) { if (id) d[base | ((h + 1) << 8)] = id; }
       // mossy boulders in forests and hills
       if (!id && topB === B.GRASS && (col.biome === BIOME.TAIGA || col.biome === BIOME.MOUNTAIN || col.biome === BIOME.DARK) && ihash(wx, wz, s + 51) < 0.003 && x > 0 && x < 15 && z > 0 && z < 15) {
         for (let dz = -1; dz <= 1; dz++) for (let dy = 0; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
@@ -309,5 +363,5 @@ Object.assign(World.prototype, {
     c.recalcAll();
     c.dirty = true;
   },
-  biomeAt(x, z) { return this.gen === 1 ? null : this.column2(Math.floor(x), Math.floor(z)).biome; },
+  biomeAt(x, z) { return this.dim ? BIOME.EMBERDEEP + this.dim - 1 : this.gen === 1 ? null : this.column2(Math.floor(x), Math.floor(z)).biome; },
 });

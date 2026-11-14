@@ -7,6 +7,26 @@ Endless procedurally generated worlds, survival and creative modes, crafting, sm
 
 ![Plains, beach and desert in a v1.2 world](screenshots/biomes.png)
 
+### New in v2.0 — realms, phones and a lot more world
+- **Three new realms**, reached through craftable gates:
+  - **The Emberdeep** — a burning underworld of cinderstone, lava seas, glowing charwood and Scorchlings. *Ember Gate = 8 Cobblestone + 4 Ember Dust + 2 Sunvein Ingots.*
+  - **The Aether** — peaceful islands above the clouds with silverwood trees, bouncy clouds and Aurorite. Nothing there attacks you. *Sky Gate = 4 Wool + 4 Glass + 2 Skyshards.*
+  - **The Hollow** — the last realm. Defeat the Hollow King to finish the game. *Hollow Gate = 4 Voidglass + 6 Cinder Shards + 3 Cinder Hearts, all found in the Emberdeep.*
+  - Place a gate and right-click it (tap it on a phone). A gate on the other side brings you home. The same guide is in the game under **Settings → How to reach the Realms**.
+- **Plays on phones and tablets** — the game notices a touch screen by itself and shows a thumb stick, jump and sneak buttons, drag-to-look, tap to place or use, and hold to break.
+- **10 more biomes** — rainforest, painted canyon, blossom grove, amber woods, ice spikes, frozen sea, flower meadow, mushroom vale, ashlands and palm shore (25 in the Overworld now).
+- **About 65 new blocks** — bricks, baked clay, dyed wool in 8 colours, lamps, bookshelves, hay, moss, ice, mud, ore blocks, palm and silverwood, and everything the realms are made of.
+- **Sharper textures** — every texture is redrawn at double resolution with smoother edges and finer detail.
+- **Choose your graphics on first launch**, and **change your avatar any time** from the title screen or the pause menu.
+
+![The Aether](screenshots/aether.png)
+
+| The Emberdeep | The Hollow |
+|---|---|
+| ![Lava seas in the Emberdeep](screenshots/emberdeep.png) | ![The Hollow King's court](screenshots/hollow.png) |
+
+![The new biomes](screenshots/new-biomes.png)
+
 ### New in v1.2 — the big world update
 - **Biomes** — plains, forests, birch and dark forests, taiga, snowy plains, deserts with cacti, savannas, swamps, rivers, beaches, oceans, windswept hills and snowy peaks. Grass and leaves change colour from biome to biome.
 - **Farm animals** — sheep, cows, pigs and hens roam in herds. Sheep give wool, cows give hide, and all of them give food.
@@ -47,7 +67,7 @@ Endless procedurally generated worlds, survival and creative modes, crafting, sm
 | W A S D | Move |
 | Mouse | Look |
 | Left click (hold) | Mine / attack |
-| Right click | Place / use / eat · open chests and doors |
+| Right click | Place / use / eat · open chests and doors · travel through gates |
 | Space | Jump (double-tap to fly in Creative) |
 | Shift / Ctrl | Sneak / sprint |
 | E | Inventory & crafting |
@@ -63,7 +83,7 @@ Endless procedurally generated worlds, survival and creative modes, crafting, sm
 
 The whole game is a single file — **`index.html`**. Open it in any modern browser with WebGL2 (Chrome, Edge, Brave, Firefox, Safari 15+), or use the GitHub Pages link above.
 
-**Multiplayer works everywhere.** On GitHub Pages (or any website) parties and servers connect through free public MQTT relays — two at once, so one going down doesn't stop the game. When the game is opened from its claude.ai link it uses claude.ai's own live connection instead, and accounts can also be saved online there. Elsewhere, accounts and single-player worlds are kept in your browser.
+**Multiplayer works everywhere.** On GitHub Pages (or any website) parties and servers connect through free public MQTT relays — two at once, so one going down doesn't stop the game. When the game is opened from its hosted app link it uses that host's own live connection instead, and accounts can also be saved online there. Elsewhere, accounts and single-player worlds are kept in your browser.
 
 Shared server worlds and server listings are stored on the public relays, so anyone running the game can see them — don't put anything private in server names.
 
@@ -80,12 +100,14 @@ python3 build.py   # writes index.html with every script and the atlas inlined
 | `core.js` | Maths, noise, blocks, items, recipes, settings, graphics presets |
 | `world.js` | Original terrain generator, caves, lighting, chunk meshing, chest storage |
 | `world2.js` | v1.2 terrain: climate, biomes, rivers, mountains, trees and biome colours |
+| `world3.js` | v2.0 terrain: ten more biomes and the generators for the Emberdeep, the Aether and the Hollow |
+| `realms.js` | Gates, travelling between realms, the Hollow King and the ending |
 | `render.js` | WebGL2 renderer, sky, clouds, water, bloom and sun-ray post-processing |
 | `entities.js` | Physics, particles, item drops, creatures |
 | `audio.js` | Synthesized sound effects, ambience and music |
 | `storage.js` | Accounts, profiles and world saves |
 | `skins.js` | Player skins and character model |
-| `relay.js` | Multiplayer without claude.ai: tiny MQTT-over-WebSocket client, rooms and shared storage on public relays, plus direct WebRTC links |
+| `relay.js` | Multiplayer anywhere: tiny MQTT-over-WebSocket client, rooms and shared storage on public relays, plus direct WebRTC links |
 | `voice.js` | Proximity voice chat |
 | `net.js` | Multiplayer parties and server sessions |
 | `servers.js` | Server list, creation and shared world saving |
@@ -96,4 +118,4 @@ python3 build.py   # writes index.html with every script and the atlas inlined
 
 ## Credits
 
-Emberwild is an original game, built with Claude from the player's brief. The texture pack was supplied by the player; every sound and note is synthesized live in the browser.
+Emberwild is an original game made by **Zénó**. Every sound and note is synthesized live in the browser.

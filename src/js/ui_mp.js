@@ -25,14 +25,14 @@ Object.assign(UI, {
   openProfile() {
     const creating = this.profileMode === 'create' || !Profile.exists;
     const p = Profile.data;
-    $('profTitle').textContent = creating ? 'Create Account' : 'Profile & Skin';
+    $('profTitle').textContent = creating ? 'Create Account' : 'Change Avatar';
     this.draftSkin = (p ? p.skin : Skins.presets[0].skin).slice();
     $('pName').value = creating ? (p && p.kind === 'account' ? p.name : '') : p.name;
     $('pName').placeholder = 'Your name in parties';
     let st;
-    if (creating) st = Cloud.canAccount ? 'Your account is linked to your Claude sign-in: name, skin and worlds are saved online and follow you to any device.' : 'Online saving isn’t available in this view, so your account will be kept in this browser.';
+    if (creating) st = Cloud.canAccount ? 'Your account is linked to your sign-in: name, skin and worlds are saved online and follow you to any device.' : 'Online saving isn’t available in this view, so your account will be kept in this browser.';
     else if (p.kind === 'guest') st = 'You’re playing as an anonymous guest. Nothing is linked to you, and your worlds stay in this browser.';
-    else st = p.cloud ? 'Signed in with your Claude account. Changes are saved online.' : 'Account kept in this browser (online saving isn’t available with your access).';
+    else st = p.cloud ? 'Signed in. Changes are saved online.' : 'Account kept in this browser (online saving isn’t available with your access).';
     $('profStatus').textContent = st;
     $('profAlt').style.display = creating ? 'none' : '';
     $('profAlt').textContent = p && p.kind === 'guest' ? 'Create Account' : 'Switch to Guest';

@@ -250,13 +250,16 @@ const Drops = {
 /* ---------------- creatures ---------------- */
 let MOB_ID = 1;
 class Gloomling {
-  constructor(x, y, z, id) {
-    this.type = 'gloom';
+  // kind: 'gloom' (default), 'scorch' (the Emberdeep's burning cousin) or 'king' (the Hollow King)
+  constructor(x, y, z, id, kind) {
+    this.type = kind || 'gloom';
     this.id = id || MOB_ID++;
     this.pos = [x, y, z]; this.tpos = [x, y, z]; this.vel = [0, 0, 0]; this.hw = 0.3; this.h = 1.9;
     this.yaw = Math.random() * 6.28; this.onGround = false;
     this.health = 16; this.hurt = 0; this.attackCd = 0; this.walk = 0; this.burn = 0;
     this.wanderT = 0; this.wanderYaw = this.yaw; this.dead = false; this.growlT = 2 + Math.random() * 6; this.swing = 0;
+    if (kind === 'scorch') this.health = 22;
+    if (kind === 'king') { this.health = this.maxHealth = [200, 240, 320, 400][Settings.difficulty]; this.hw = 0.7; this.h = 4.8; this.hitW = 0.95; this.hitH = 4.9; this.scale = 2.6; this.leapT = 6; }
   }
 }
 // passive animals: one behaviour, different bodies
@@ -334,7 +337,21 @@ const Mobs = {
     const cap = [0, 4, 7, 10][diff];
     if (diff > 0 && !game.creative && this.spawnT <= 0 && P.alive) {
       this.spawnT = 1.5;
-      if (night > 0.7 && this.list.filter(m => m.type === 'gloom').length < cap) {
+      // Scorchlings prowl the Emberdeep at all hours
+      if (world.dim === 1 && this.list.filter(m => m.type === 'scorch').length < [0, 3, 5, 7][diff]) {
+        for (let tries = 0; tries < 6; tries++) {
+          const a = Math.random() * Math.PI * 2, r = 14 + Math.random() * 18;
+          const x = Math.floor(P.pos[0] + Math.cos(a) * r), z = Math.floor(P.pos[2] + Math.sin(a) * r);
+          if (!world.isLoaded(x, z)) continue;
+          let y = -1;
+          for (let yy = Math.max(3, Math.floor(P.pos[1]) - 8); yy <= Math.min(WH - 4, Math.floor(P.pos[1]) + 8); yy++)
+            if (world.getBlock(x, yy, z) === 0 && world.getBlock(x, yy + 1, z) === 0 && SOLID[world.getBlock(x, yy - 1, z)]) { y = yy; break; }
+          if (y < 0) continue;
+          this.list.push(new Gloomling(x + 0.5, y, z + 0.5, 0, 'scorch')); game.audio.growl(0.5);
+          break;
+        }
+      }
+      if (!world.dim && night > 0.7 && this.list.filter(m => m.type === 'gloom').length < cap) {
         for (let tries = 0; tries < 6; tries++) {
           const tp = targets.length ? targets[(Math.random() * targets.length) | 0].pos : P.pos;
           const a = Math.random() * Math.PI * 2, r = 20 + Math.random() * 18;
@@ -354,7 +371,7 @@ const Mobs = {
     }
     // Duskcrawlers lurk in dark caves at any hour
     this.crawlT -= dt;
-    if (this.crawlT <= 0 && diff > 0 && !game.creative && targets.length) {
+    if (this.crawlT <= 0 && diff > 0 && !game.creative && targets.length && !world.dim) {
       this.crawlT = 2;
       const cap = [0, 2, 4, 6][diff];
       if (this.list.filter(m => m.type === 'crawl').length < cap) {
@@ -383,19 +400,20 @@ const Mobs = {
         const x = Math.floor(tp[0] + Math.cos(a) * r), z = Math.floor(tp[2] + Math.sin(a) * r);
         const h = world.isLoaded(x, z) ? world.skyHeight(x, z) : -1;
         const ground = h > 0 ? world.getBlock(x, h, z) : 0;
-        if (h > SEA && (ground === B.GRASS || ground === B.SNOW_GRASS) && !herd.some(m => Math.hypot(m.pos[0] - x, m.pos[2] - z) < 20)) {
+        if (h > SEA && (ground === B.GRASS || ground === B.SNOW_GRASS || ground === B.AETHER_GRASS) && !herd.some(m => Math.hypot(m.pos[0] - x, m.pos[2] - z) < 20)) {
           const bio = world.biomeAt(x, z);
           let kinds = ['moss'];
           if (bio !== null) {
-            if (bio === BIOME.PLAINS || bio === BIOME.SAVANNA) kinds = ['sheep', 'cow', 'pig', 'hen', 'sheep', 'cow'];
-            else if (bio === BIOME.FOREST || bio === BIOME.BIRCH || bio === BIOME.DARK || bio === BIOME.SWAMP) kinds = ['pig', 'hen', 'sheep', 'cow'];
+            if (bio === BIOME.PLAINS || bio === BIOME.SAVANNA || bio === BIOME.MEADOW) kinds = ['sheep', 'cow', 'pig', 'hen', 'sheep', 'cow'];
+            else if (bio === BIOME.AETHER) kinds = ['sheep', 'hen', 'moss', 'sheep'];
+            else if ([BIOME.FOREST, BIOME.BIRCH, BIOME.DARK, BIOME.SWAMP, BIOME.BLOSSOM, BIOME.AUTUMN, BIOME.JUNGLE].includes(bio)) kinds = ['pig', 'hen', 'sheep', 'cow'];
             else if (bio === BIOME.TAIGA || bio === BIOME.SNOWY || bio === BIOME.SNOWY_TAIGA || bio === BIOME.MOUNTAIN) kinds = ['moss', 'sheep', 'moss'];
           } else kinds = ['moss', 'sheep', 'cow', 'pig', 'hen'];
           const kind = kinds[(Math.random() * kinds.length) | 0];
           const n = kind === 'hen' ? 3 + ((Math.random() * 2) | 0) : 2 + ((Math.random() * 3) | 0);
           for (let k = 0; k < n; k++) {
             const sx = x + ((Math.random() * 5) | 0) - 2, sz = z + ((Math.random() * 5) | 0) - 2, sh = world.skyHeight(sx, sz), gb = world.getBlock(sx, sh, sz);
-            if ((gb === B.GRASS || gb === B.SNOW_GRASS) && !solidAt(world, sx, sh + 1, sz)) this.list.push(new Mossback(sx + 0.5, sh + 1, sz + 0.5, 0, kind));
+            if ((gb === B.GRASS || gb === B.SNOW_GRASS || gb === B.AETHER_GRASS) && !solidAt(world, sx, sh + 1, sz)) this.list.push(new Mossback(sx + 0.5, sh + 1, sz + 0.5, 0, kind));
           }
         }
       }
@@ -409,18 +427,20 @@ const Mobs = {
       const tpos = tgt ? tgt.pos : P.pos;
       const dx = tpos[0] - m.pos[0], dz = tpos[2] - m.pos[2], dy = tpos[1] - m.pos[1];
       const dist = Math.hypot(dx, dz);
-      if ((dist > 80 && !(Net.active && targets.some(t => Math.hypot(t.pos[0] - m.pos[0], t.pos[2] - m.pos[2]) < 80))) || m.health <= 0) {
+      if ((dist > 80 && m.type !== 'king' && !(Net.active && targets.some(t => Math.hypot(t.pos[0] - m.pos[0], t.pos[2] - m.pos[2]) < 80))) || m.health <= 0) {
         if (m.health <= 0) {
           Particles.burst(m.pos[0], m.pos[1] + 1, m.pos[2], TEX.smoke, 22, { full: true, size: 0.2, grav: -1.5, speed: 2, life: 0.8, drag: 2, grow: 0.25 });
           Particles.burst(m.pos[0], m.pos[1] + 1.2, m.pos[2], TEX.spark, 10, { full: true, size: 0.07, grav: -0.5, emissive: true, speed: 3, life: 0.6 });
-          if (m.byPlayer && Math.random() < 0.65) Drops.spawn(I.COAL, 1 + (Math.random() < 0.3 ? 1 : 0), undefined, m.pos[0], m.pos[1] + 1, m.pos[2]);
+          if (m.type === 'king') game.kingDefeated(m);
+          else if (m.type === 'scorch') { if (m.byPlayer) { if (Math.random() < 0.6) Drops.spawn(I.CINDER_HEART, 1, undefined, m.pos[0], m.pos[1] + 1, m.pos[2]); Drops.spawn(I.EMBER_DUST, 1 + (Math.random() * 2 | 0), undefined, m.pos[0], m.pos[1] + 1, m.pos[2]); } }
+          else if (m.byPlayer && Math.random() < 0.65) Drops.spawn(I.COAL, 1 + (Math.random() < 0.3 ? 1 : 0), undefined, m.pos[0], m.pos[1] + 1, m.pos[2]);
           game.audio.poof(); if (m.byPlayer) game.stats.kills++;
         }
         this.list.splice(i, 1); continue;
       }
       m.hurt = Math.max(0, m.hurt - dt); m.attackCd -= dt; m.swing = Math.max(0, m.swing - dt * 3);
       // daylight burn
-      if (game.sky.day > 0.55) {
+      if (game.sky.day > 0.55 && m.type === 'gloom' && !world.dim) {
         const H = world.skyHeight(Math.floor(m.pos[0]), Math.floor(m.pos[2]));
         if (m.pos[1] + 1 > H) {
           m.burn += dt;
@@ -430,19 +450,22 @@ const Mobs = {
       }
       const inWater = world.getBlock(Math.floor(m.pos[0]), Math.floor(m.pos[1] + 0.5), Math.floor(m.pos[2])) === B.WATER;
       let tx = 0, tz = 0, speed = 0;
-      const chasing = !!tgt && !game.creative && dist < 22 && Math.abs(dy) < 12;
+      const king = m.type === 'king';
+      const chasing = !!tgt && !game.creative && dist < (king ? 90 : 22) && Math.abs(dy) < (king ? 40 : 12);
       if (chasing) {
         m.yaw = Math.atan2(dx, -dz);
-        speed = dist > 1.2 ? [0, 2.4, 3.0, 3.6][diff] : 0;
+        speed = dist > (king ? 2.4 : 1.2) ? (king ? 3.1 : [0, 2.4, 3.0, 3.6][diff] * (m.type === 'scorch' ? 1.15 : 1)) : 0;
         tx = Math.sin(m.yaw); tz = -Math.cos(m.yaw);
         m.growlT -= dt;
         if (m.growlT < 0) { m.growlT = 4 + Math.random() * 6; game.audio.growl(clamp(1 - dist / 22, 0.1, 1)); }
-        if (dist < 1.5 && Math.abs(dy) < 1.6 && m.attackCd <= 0) {
-          m.attackCd = 1.1; m.swing = 1;
-          const dmg = [0, 2, 3, 5][diff];
+        if (dist < (king ? 3.3 : 1.5) && Math.abs(dy) < (king ? 5 : 1.6) && m.attackCd <= 0 && !m.air) {
+          m.attackCd = king ? 1.5 : 1.1; m.swing = 1;
+          const dmg = king ? [2, 5, 7, 10][diff] : [0, 2, 3, 5][diff] + (m.type === 'scorch' ? 1 : 0);
           if (tgt.peer) Net.hostHit(tgt.peer, dmg, dx / (dist || 1), dz / (dist || 1));
-          else game.damagePlayer(dmg, 'gloom', [dx / (dist || 1), dz / (dist || 1)]);
+          else game.damagePlayer(dmg, king ? 'king' : m.type === 'scorch' ? 'scorch' : 'gloom', [dx / (dist || 1), dz / (dist || 1)]);
         }
+        // the King leaps at anyone who keeps their distance
+        if (king) { m.leapT -= dt; if (m.onGround && !m.air && m.leapT <= 0 && dist > 5) { m.leapT = 5 + Math.random() * 3; m.vel[1] = 12.5; const v = Math.min(12, dist * 0.85); m.leapV = [dx / dist * v, dz / dist * v]; m.air = 0.2; game.audio.growl(1); } }
       } else {
         m.wanderT -= dt;
         if (m.wanderT <= 0) { m.wanderT = 2 + Math.random() * 4; m.wanderYaw = Math.random() * 6.28; m.idle = Math.random() < 0.4; }
@@ -455,12 +478,29 @@ const Mobs = {
       m.vel[1] -= (inWater ? 6 : 28) * dt;
       if (inWater) { m.vel[1] = Math.max(m.vel[1], -2); if (speed) m.vel[1] += 14 * dt; }
       m.vel[1] = Math.max(m.vel[1], -50);
+      if (m.air) { m.vel[0] = m.leapV[0]; m.vel[2] = m.leapV[1]; m.air += dt; }
       const res = moveEntity(world, m, m.vel[0] * dt, m.vel[1] * dt, m.vel[2] * dt);
+      if (king) this.kingStep(world, m, game, res, dist, dx, dz);
       if (res.y) m.vel[1] = 0;
-      if ((res.x || res.z) && m.onGround && speed > 0) m.vel[1] = 8.2;
+      if ((res.x || res.z) && m.onGround && speed > 0) m.vel[1] = king ? 10.5 : 8.2;
       m.walk += Math.hypot(m.vel[0], m.vel[2]) * dt * 2.2;
       // push away from player a bit
       if (dist < 0.6 && tgt) { m.pos[0] -= dx * dt * 2; m.pos[2] -= dz * dt * 2; }
+    }
+  },
+  // the Hollow King: slams the ground when a leap lands, calls Gloomlings as he weakens, and never stays fallen
+  kingStep(world, m, game, res, dist, dx, dz) {
+    const diff = Settings.difficulty;
+    if (m.air > 0.3 && m.onGround) {
+      m.air = 0; game.audio.poof(); game.shake = 0.5;
+      for (let k = 0; k < 20; k++) { const a = k / 20 * 6.283; Particles.burst(m.pos[0] + Math.cos(a) * 2.6, m.pos[1] + 0.2, m.pos[2] + Math.sin(a) * 2.6, TEX.nullstone, 3, { size: 0.09, speed: 3, up: 3, life: 0.7 }); }
+      if (dist < 5.5 && game.player.onGround) game.damagePlayer([1, 3, 5, 7][diff], 'king', [dx / (dist || 1) * 1.6, dz / (dist || 1) * 1.6]);
+    }
+    if (m.pos[1] < 24) { const c = world.realmColumn(0, 0); m.pos = [0.5, c.h + 2, 0.5]; m.vel = [0, 0, 0]; m.air = 0; }
+    const stage = m.health < m.maxHealth / 3 ? 2 : m.health < m.maxHealth * 2 / 3 ? 1 : 0;
+    if (stage > (m.stage || 0)) {
+      m.stage = stage; UI.toast('The Hollow King calls his Gloomlings!', 'gold'); game.audio.growl(1);
+      if (diff > 0) for (let k = 0; k < 1 + stage; k++) { const a = Math.random() * 6.283; this.list.push(new Gloomling(m.pos[0] + Math.cos(a) * 4, m.pos[1] + 1, m.pos[2] + Math.sin(a) * 4)); }
     }
   },
   updateAnimal(world, m, dt, game, targets) {
@@ -552,7 +592,7 @@ const Mobs = {
   hitTest(o, d, maxDist) {
     let best = null, bt = maxDist;
     for (const m of this.list) {
-      const w = m.animal ? ANIMALS[m.type].w : m.type === 'crawl' ? 0.55 : 0.4, hh = m.animal ? ANIMALS[m.type].hh : m.type === 'crawl' ? 0.8 : 2.0;
+      const w = m.hitW || (m.animal ? ANIMALS[m.type].w : m.type === 'crawl' ? 0.55 : 0.4), hh = m.hitH || (m.animal ? ANIMALS[m.type].hh : m.type === 'crawl' ? 0.8 : 2.0);
       const t = rayAABB(o, d, m.pos[0] - w, m.pos[1], m.pos[2] - w, m.pos[0] + w, m.pos[1] + hh, m.pos[2] + w);
       if (t >= 0 && t < bt) { bt = t; best = m; }
     }
@@ -599,8 +639,9 @@ const Mobs = {
       const base = M4.create();
       M4.translate(base, m.pos[0], m.pos[1], m.pos[2]);
       M4.rotY(base, -m.yaw);
-      const sw = Math.sin(m.walk) * 0.7;
-      const S = TEX.gloom_skin, F = TEX.gloom_face;
+      if (m.scale) M4.scale(base, m.scale, m.scale, m.scale);
+      const sw = Math.sin(m.walk * (m.scale ? 0.5 : 1)) * 0.7;
+      const S = m.type === 'scorch' ? TEX.scorch_skin : m.type === 'king' ? TEX.hollow_skin : TEX.gloom_skin, F = m.type === 'scorch' ? TEX.scorch_face : m.type === 'king' ? TEX.hollow_face : TEX.gloom_face;
       const box = (mat, x0, y0, z0, x1, y1, z1, layers, flags) => {
         emitBox(R.dyn, x0, y0, z0, x1, y1, z1, layers, [0, 0, 1, 1], 1, sky, blk, flags || 0, p => {
           return [mat[0] * p[0] + mat[4] * p[1] + mat[8] * p[2] + mat[12], mat[1] * p[0] + mat[5] * p[1] + mat[9] * p[2] + mat[13], mat[2] * p[0] + mat[6] * p[1] + mat[10] * p[2] + mat[14]];
@@ -657,7 +698,7 @@ const Mobs = {
       const hm = M4.create(); hm.set(t); M4.translate(hm, 0, 0.74, -0.06);
       M4.rotX(hm, -0.2 + Math.sin(time * 2 + m.walk) * 0.05);
       box(hm, -0.25, 0, -0.25, 0.25, 0.5, 0.25, [S, S, S, S, S, F]);
-      box(hm, -0.25, 0, -0.262, 0.25, 0.5, -0.256, [-1, -1, -1, -1, -1, TEX.gloom_eyes], 8);
+      box(hm, -0.25, 0, -0.262, 0.25, 0.5, -0.256, [-1, -1, -1, -1, -1, m.type === 'scorch' ? TEX.scorch_eyes : m.type === 'king' ? TEX.hollow_eyes : TEX.gloom_eyes], 8);
       // long arms
       for (const side of [-1, 1]) {
         const a = M4.create(); a.set(t); M4.translate(a, side * 0.39, 0.66, 0);

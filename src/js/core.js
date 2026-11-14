@@ -124,10 +124,26 @@ const B = {
   SNOW: 40, GLOWCAP: 41, MUSHROOM_RED: 42, MUSHROOM_BROWN: 43, REED: 44, CAMPFIRE: 45, FURNACE: 46, FURNACE_LIT: 47, BED: 48,
   SANDSTONE: 49, GRAVEL: 50, CLAY: 51, CACTUS: 52, DEAD_BUSH: 53, SNOW_GRASS: 54, CHEST: 55, WOOL: 56, CHEST_E: 57, CHEST_W: 58, CHEST_N: 59,
   DOOR: 60, /* 60-67: side * 2 + open */ LADDER: 68, /* 68-71: which wall it hangs on */
+  // v2.0 building blocks (72-99; 100-159 are items)
+  CLAY_BRICKS: 72, SMOOTH_STONE: 73, POLISHED_BASALT: 74, CUT_SANDSTONE: 75, RED_SAND: 76, RED_SANDSTONE: 77, TERRACOTTA: 78, TERRACOTTA_ORANGE: 79,
+  TERRACOTTA_WHITE: 80, MUD: 81, ICE: 82, LOAM: 83, MOSS: 84, HAY: 85, LAMP: 86, SHELF: 87, SUNVEIN_BLOCK: 88, SKYSHARD_BLOCK: 89, AZURITE_BLOCK: 90,
+  VERDITE_BLOCK: 91, COAL_BLOCK: 92, WOOL_RED: 93, /* 93-99 + 160: red orange yellow green blue purple pink black */ WOOL_BLACK: 160,
+  PALM_LOG: 161, PALM_PLANKS: 162, PALM_LEAVES: 163, BLOSSOM_LEAVES: 164, AUTUMN_LEAVES: 165, FERN: 166, FLOWER_VIOLET: 167, FLOWER_ROSE: 168,
+  MUSHROOM_CAP: 169, MUSHROOM_STEM: 170, SPORE_SOIL: 171,
+  // the Emberdeep
+  ASH: 172, MAGMA: 173, LAVA: 174, CINDERSTONE: 175, ORE_CINDER: 176, VOIDGLASS: 177, GLIMMERSTONE: 178, CHARWOOD_LOG: 179, CINDER_LEAVES: 180, CINDER_BRICKS: 181,
+  // the Aether
+  AETHER_GRASS: 182, AETHER_SOIL: 183, HALOSTONE: 184, HALO_BRICKS: 185, CLOUD: 186, SILVER_LOG: 187, SILVER_PLANKS: 188, GILDED_LEAVES: 189,
+  ORE_AURORITE: 190, AURORITE_BLOCK: 191, STARBLOOM: 192,
+  // the Hollow
+  NULLSTONE: 193, NULL_BRICKS: 194, VOID_LAMP: 195,
+  // gates between the realms
+  GATE_EMBER: 196, GATE_SKY: 197, GATE_HOLLOW: 198,
 };
 const I = {
   STICK: 100, COAL: 101, SUNVEIN: 102, EMBER_DUST: 103, AZURITE: 104, SKYSHARD: 105, VERDITE: 106, APPLE: 107, BERRIES: 108,
   RAW_HAUNCH: 120, ROAST_HAUNCH: 121, CHARCOAL: 122, SUNVEIN_INGOT: 123, HIDE: 124, SILK: 125,
+  CINDER_SHARD: 126, CINDER_HEART: 127, AURORITE: 128, AURORA_BLADE: 129, EMBER_CROWN: 138,
   SUNVEIN_PICK: 130, SUNVEIN_AXE: 131, SUNVEIN_SHOVEL: 132, SUNVEIN_SWORD: 133, SKY_PICK: 134, SKY_AXE: 135, SKY_SHOVEL: 136, SKY_SWORD: 137,
   ARMOR0: 140,
   WOOD_PICK: 110, STONE_PICK: 111, WOOD_AXE: 112, STONE_AXE: 113, WOOD_SHOVEL: 114, STONE_SHOVEL: 115, WOOD_SWORD: 116, STONE_SWORD: 117,
@@ -234,6 +250,79 @@ for (let k = 0; k < 4; k++) defBlock(B.LADDER + k, 'Ladder', { tex: 'ladder', op
   defBlock(cid, 'Chest', { tex: { faces }, hard: 2.5, tool: 'axe', sound: 'wood', noItem: true, drop: one(B.CHEST) });
 });
 defBlock(B.WOOL, 'Wool', { tex: 'wool', hard: 0.8, sound: 'leaves', desc: 'Soft and warm. Good for beds and building.' });
+// ---- v2.0: more building blocks ----
+const WOOLS = [['Red', 'red'], ['Orange', 'orange'], ['Yellow', 'yellow'], ['Green', 'green'], ['Blue', 'blue'], ['Purple', 'purple'], ['Pink', 'pink'], ['Black', 'black']];
+const woolId = k => k < 7 ? B.WOOL_RED + k : B.WOOL_BLACK;
+const rockB = (tex, hard, tier, extra) => Object.assign({ tex, hard, tool: 'pick', tier: tier || 1 }, extra || {});
+const softB = (tex, hard, sound, extra) => Object.assign({ tex, hard, tool: 'shovel', sound: sound || 'sand' }, extra || {});
+const leafB = (tex, extra) => Object.assign({ tex, opaque: false, cutout: true, leaves: true, hard: 0.2, tool: 'axe', sound: 'leaves' }, extra || {});
+defBlock(B.CLAY_BRICKS, 'Bricks', rockB('bricks', 2));
+defBlock(B.SMOOTH_STONE, 'Smooth Stone', rockB('smooth_stone', 1.5));
+defBlock(B.POLISHED_BASALT, 'Polished Basalt', rockB('polished_basalt', 2.5));
+defBlock(B.CUT_SANDSTONE, 'Cut Sandstone', rockB({ top: 'sandstone_top', bottom: 'sandstone_top', side: 'cut_sandstone' }, 0.8));
+defBlock(B.RED_SAND, 'Red Sand', softB('red_sand', 0.5));
+defBlock(B.RED_SANDSTONE, 'Red Sandstone', rockB('red_sandstone', 0.8));
+defBlock(B.TERRACOTTA, 'Baked Clay', rockB('terracotta', 1.2, 1, { desc: 'Clay hardened in a furnace. The painted canyons are made of it.' }));
+defBlock(B.TERRACOTTA_ORANGE, 'Orange Baked Clay', rockB('terracotta_orange', 1.2));
+defBlock(B.TERRACOTTA_WHITE, 'Pale Baked Clay', rockB('terracotta_white', 1.2));
+defBlock(B.MUD, 'Mud', softB('mud', 0.5, 'grass'));
+defBlock(B.ICE, 'Ice', rockB('ice', 0.5, 0, { sound: 'glass', tier: 0, desc: 'Frozen solid. Found on frozen seas and ice spikes.' }));
+defBlock(B.LOAM, 'Forest Loam', softB({ top: 'loam_top', side: 'dirt', bottom: 'dirt' }, 0.5, 'grass', { drop: one(B.DIRT) }));
+defBlock(B.MOSS, 'Moss Block', softB('moss', 0.3, 'grass', { tool: null }));
+defBlock(B.HAY, 'Hay Bale', { tex: { top: 'hay_top', bottom: 'hay_top', side: 'hay_side' }, hard: 0.5, sound: 'leaves', desc: 'Soft landing: falling on hay hurts much less.' });
+defBlock(B.LAMP, 'Sunvein Lamp', { tex: 'lamp', hard: 0.6, sound: 'glass', light: 15, desc: 'The brightest light you can build.' });
+defBlock(B.SHELF, 'Bookshelf', { tex: { top: 'oak_planks', bottom: 'oak_planks', side: 'shelf' }, hard: 1.5, tool: 'axe', sound: 'wood' });
+defBlock(B.SUNVEIN_BLOCK, 'Block of Sunvein', rockB('sunvein_block', 3, 2));
+defBlock(B.SKYSHARD_BLOCK, 'Block of Skyshard', rockB('skyshard_block', 4, 3));
+defBlock(B.AZURITE_BLOCK, 'Block of Azurite', rockB('azurite_block', 3, 2));
+defBlock(B.VERDITE_BLOCK, 'Block of Verdite', rockB('verdite_block', 3, 2));
+defBlock(B.COAL_BLOCK, 'Block of Coal', rockB('coal_block', 3, 1));
+WOOLS.forEach(([n, key], k) => defBlock(woolId(k), n + ' Wool', { tex: 'wool_' + key, hard: 0.8, sound: 'leaves' }));
+defBlock(B.PALM_LOG, 'Palm Log', { tex: { top: 'palm_top', side: 'palm_bark' }, hard: 2, tool: 'axe', sound: 'wood' });
+defBlock(B.PALM_PLANKS, 'Palm Planks', { tex: 'palm_planks', hard: 2, tool: 'axe', sound: 'wood' });
+defBlock(B.PALM_LEAVES, 'Palm Fronds', leafB('leaves_palm', { drop: (r) => r() < 0.25 ? [[B.PALM_LEAVES, 1]] : r() < 0.1 ? [[I.APPLE, 1]] : [] }));
+defBlock(B.BLOSSOM_LEAVES, 'Blossom Leaves', leafB('leaves_blossom', { drop: (r) => r() < 0.3 ? [[B.BLOSSOM_LEAVES, 1]] : r() < 0.06 ? [[I.STICK, 1]] : [] }));
+defBlock(B.AUTUMN_LEAVES, 'Amber Leaves', leafB('leaves_autumn', { drop: (r) => r() < 0.3 ? [[B.AUTUMN_LEAVES, 1]] : r() < 0.08 ? [[I.APPLE, 1]] : [] }));
+defBlock(B.FERN, 'Fern', plant('', 'fern', { replaceable: true, drop: () => [] }));
+defBlock(B.FLOWER_VIOLET, 'Duskviolet', plant('', 'flower_violet'));
+defBlock(B.FLOWER_ROSE, 'Rosebell', plant('', 'flower_rose'));
+defBlock(B.MUSHROOM_CAP, 'Giant Mushroom Cap', { tex: 'mushroom_cap', hard: 0.3, tool: 'axe', sound: 'leaves', drop: (r) => r() < 0.4 ? [[B.MUSHROOM_RED, 1]] : [[B.MUSHROOM_CAP, 1]] });
+defBlock(B.MUSHROOM_STEM, 'Giant Mushroom Stem', { tex: 'mushroom_stem', hard: 0.4, tool: 'axe', sound: 'wood' });
+defBlock(B.SPORE_SOIL, 'Spore Soil', softB({ top: 'spore_top', side: 'dirt', bottom: 'dirt' }, 0.6, 'grass', { drop: one(B.DIRT) }));
+// ---- the Emberdeep ----
+defBlock(B.ASH, 'Ash', softB('ash', 0.4));
+defBlock(B.MAGMA, 'Magma Rock', rockB('magma', 1.2, 1, { light: 9, desc: 'Glows with heat. Burns anything that stands on it.' }));
+defBlock(B.LAVA, 'Lava', { tex: 'lava', solid: false, light: 15, hard: -1, replaceable: true, noItem: true });
+defBlock(B.CINDERSTONE, 'Cinderstone', rockB('cinderstone', 1.0, 1, { desc: 'The scorched rock of the Emberdeep.' }));
+defBlock(B.ORE_CINDER, 'Cinder Ore', rockB('ore_cinder', 2.5, 2, { light: 5, drop: (r) => { const out = [[I.CINDER_SHARD, 1 + (r() * 2 | 0)]]; if (Settings.difficulty === 0 && r() < 0.15) out.push([I.CINDER_HEART, 1]); return out; } }));
+defBlock(B.VOIDGLASS, 'Voidglass', rockB('voidglass', 7, 3, { sound: 'glass', desc: 'Black glass born where lava cools. Needs a Sunvein Pickaxe. A Hollow Gate is made of it.' }));
+defBlock(B.GLIMMERSTONE, 'Glimmerstone', { tex: 'glimmerstone', hard: 0.5, sound: 'glass', light: 15, desc: 'Hangs glowing from the roof of the Emberdeep.' });
+defBlock(B.CHARWOOD_LOG, 'Charwood Log', { tex: { top: 'charwood_top', side: 'charwood_bark' }, hard: 2, tool: 'axe', sound: 'wood', light: 3 });
+defBlock(B.CINDER_LEAVES, 'Cinder Leaves', leafB('leaves_cinder', { light: 8, drop: (r) => r() < 0.3 ? [[B.CINDER_LEAVES, 1]] : r() < 0.1 ? [[I.EMBER_DUST, 1]] : [] }));
+defBlock(B.CINDER_BRICKS, 'Cinder Bricks', rockB('cinder_bricks', 2));
+// ---- the Aether ----
+defBlock(B.AETHER_GRASS, 'Aether Grass', softB({ top: 'aether_grass_top', side: 'aether_grass_side', bottom: 'aether_soil' }, 0.6, 'grass', { drop: one(B.AETHER_SOIL) }));
+defBlock(B.AETHER_SOIL, 'Aether Soil', softB('aether_soil', 0.5, 'grass'));
+defBlock(B.HALOSTONE, 'Halostone', rockB('halostone', 1.4, 1, { desc: 'Pale stone from the islands of the Aether.' }));
+defBlock(B.HALO_BRICKS, 'Halostone Bricks', rockB('halo_bricks', 1.6));
+defBlock(B.CLOUD, 'Cloud', { tex: 'cloud', hard: 0.2, sound: 'leaves', desc: 'Soft and springy. You can walk on it, and landing on it never hurts.' });
+defBlock(B.SILVER_LOG, 'Silverwood Log', { tex: { top: 'silver_top', side: 'silver_bark' }, hard: 2, tool: 'axe', sound: 'wood' });
+defBlock(B.SILVER_PLANKS, 'Silverwood Planks', { tex: 'silver_planks', hard: 2, tool: 'axe', sound: 'wood' });
+defBlock(B.GILDED_LEAVES, 'Gilded Leaves', leafB('leaves_gilded', { light: 4, drop: (r) => r() < 0.3 ? [[B.GILDED_LEAVES, 1]] : r() < 0.12 ? [[I.APPLE, 1]] : [] }));
+defBlock(B.ORE_AURORITE, 'Aurorite Ore', rockB('ore_aurorite', 3, 3, { light: 6, drop: one(I.AURORITE) }));
+defBlock(B.AURORITE_BLOCK, 'Block of Aurorite', rockB('aurorite_block', 3, 2, { light: 12 }));
+defBlock(B.STARBLOOM, 'Starbloom', plant('', 'starbloom', { light: 7, anyGround: true }));
+// ---- the Hollow ----
+defBlock(B.NULLSTONE, 'Nullstone', rockB('nullstone', 2, 2, { desc: 'Cold rock from the Hollow, flecked with tiny stars.' }));
+defBlock(B.NULL_BRICKS, 'Nullstone Bricks', rockB('null_bricks', 2.4, 2));
+defBlock(B.VOID_LAMP, 'Star Lantern', { tex: 'void_lamp', hard: 0.6, sound: 'glass', light: 14 });
+// ---- gates ----
+defBlock(B.GATE_EMBER, 'Ember Gate', rockB('gate_ember', 4, 1, { light: 13, desc: 'Place it and right-click to travel to the Emberdeep. Right-click a gate there to come home.' }));
+defBlock(B.GATE_SKY, 'Sky Gate', rockB('gate_sky', 4, 1, { light: 13, desc: 'Place it and right-click to travel to the Aether, a peaceful realm above the clouds.' }));
+defBlock(B.GATE_HOLLOW, 'Hollow Gate', rockB('gate_hollow', 4, 1, { light: 13, desc: 'Place it and right-click to enter the Hollow and face the Hollow King.' }));
+ITEMS[B.LAVA] = { id: B.LAVA, name: 'Lava', icon: 'lava', stack: 64, block: B.LAVA, desc: 'Creative only. Very hot.', creative: true, iso: true };
+TARGETABLE[B.LAVA] = 0;
+const isGate = id => id >= B.GATE_EMBER && id <= B.GATE_HOLLOW;
 // leaves drop themselves
 for (const id of [B.OAK_LEAVES, B.BIRCH_LEAVES, B.PINE_LEAVES]) {
   const f = BLOCKS[id].drop; BLOCKS[id].drop = (r) => f(r).map(([i, n]) => [i === -1 ? id : i, n]);
@@ -258,7 +347,7 @@ function decodeSlots(a, size) {
   return s;
 }
 const isPlant = id => RTYPE[id] === RT_CROSS;
-const isLeaves = id => id === B.OAK_LEAVES || id === B.BIRCH_LEAVES || id === B.PINE_LEAVES;
+const isLeaves = id => !!(BLOCKS[id] && BLOCKS[id].leaves);
 
 defItem(I.STICK, 'Stick', 'stick');
 defItem(I.COAL, 'Coal', 'coal', { desc: 'Fuel for torches and glassmaking.' });
@@ -274,6 +363,11 @@ defItem(I.CHARCOAL, 'Charcoal', 'charcoal', { desc: 'Burned wood. Works like coa
 defItem(I.SUNVEIN_INGOT, 'Sunvein Ingot', 'ingot_sunvein', { desc: 'Smelted from Sunvein nuggets. Makes strong tools and armour.' });
 defItem(I.HIDE, 'Mossback Hide', 'hide', { desc: 'Tough hide from a Mossback. Makes light armour and beds.' });
 defItem(I.SILK, 'Crawler Silk', 'silk', { desc: 'Spun by Duskcrawlers deep underground.' });
+defItem(I.CINDER_SHARD, 'Cinder Shard', 'cinder_shard', { desc: 'A hot crystal mined in the Emberdeep. Needed for the Hollow Gate.' });
+defItem(I.CINDER_HEART, 'Cinder Heart', 'cinder_heart', { desc: 'Still warm. Dropped by Scorchlings in the Emberdeep. Three of them open the way to the Hollow.' });
+defItem(I.AURORITE, 'Aurorite', 'aurorite', { desc: 'A shimmering crystal from the Aether. Forge it into the Aurora Blade.' });
+defItem(I.AURORA_BLADE, 'Aurora Blade', 'aurora_blade', { stack: 1, tool: { type: 'sword', tier: 4, speed: 8.6, dur: 1600, dmg: 11 }, desc: 'The strongest sword there is.' });
+defItem(I.EMBER_CROWN, 'Ember Crown', 'ember_crown', { stack: 1, desc: 'The crown of the Hollow King. Proof that you finished Emberwild.' });
 defItem(I.ROAST_HAUNCH, 'Roasted Haunch', 'haunch_cooked', { food: 8, sat: 9, desc: 'A hearty meal. Restores 4 hunger icons.' });
 const TOOLS = [
   [I.WOOD_PICK, 'Wooden Pickaxe', 'wood_pick', 'pick', 1], [I.STONE_PICK, 'Stone Pickaxe', 'stone_pick', 'pick', 2],
@@ -302,18 +396,20 @@ const armorId = (mat, slot) => I.ARMOR0 + mat * 4 + slot;
 
 // ---------- recipes ----------
 const GROUPS = {
-  planks: [B.OAK_PLANKS, B.BIRCH_PLANKS, B.PINE_PLANKS, B.EMBER_PLANKS],
-  leaves: [B.OAK_LEAVES, B.BIRCH_LEAVES, B.PINE_LEAVES],
-  logs: [B.OAK_LOG, B.BIRCH_LOG, B.PINE_LOG],
+  planks: [B.OAK_PLANKS, B.BIRCH_PLANKS, B.PINE_PLANKS, B.EMBER_PLANKS, B.PALM_PLANKS, B.SILVER_PLANKS],
+  leaves: [B.OAK_LEAVES, B.BIRCH_LEAVES, B.PINE_LEAVES, B.PALM_LEAVES, B.BLOSSOM_LEAVES, B.AUTUMN_LEAVES, B.GILDED_LEAVES, B.CINDER_LEAVES],
+  logs: [B.OAK_LOG, B.BIRCH_LOG, B.PINE_LOG, B.PALM_LOG, B.SILVER_LOG, B.CHARWOOD_LOG],
+  wool: [B.WOOL, 93, 94, 95, 96, 97, 98, 99, 160],
   coal: [I.COAL, I.CHARCOAL],
 };
 // furnace: what smelts into what, and how many seconds of burning each fuel gives
 const SMELT = { [B.COBBLE]: B.STONE, [B.SAND]: B.GLASS, [I.RAW_HAUNCH]: I.ROAST_HAUNCH, [I.SUNVEIN]: I.SUNVEIN_INGOT,
-  [B.OAK_LOG]: I.CHARCOAL, [B.BIRCH_LOG]: I.CHARCOAL, [B.PINE_LOG]: I.CHARCOAL, [B.MOSSY]: B.COBBLE, [B.BRICKS]: B.STONE };
+  [B.OAK_LOG]: I.CHARCOAL, [B.BIRCH_LOG]: I.CHARCOAL, [B.PINE_LOG]: I.CHARCOAL, [B.MOSSY]: B.COBBLE, [B.BRICKS]: B.STONE,
+  [B.PALM_LOG]: I.CHARCOAL, [B.SILVER_LOG]: I.CHARCOAL, [B.CLAY]: B.TERRACOTTA, [B.STONE]: B.SMOOTH_STONE, [B.RED_SAND]: B.GLASS, [B.MUD]: B.CLAY_BRICKS, [B.ICE]: B.WATER };
 const FUEL = { [I.COAL]: 80, [I.CHARCOAL]: 80, [B.OAK_PLANKS]: 15, [B.BIRCH_PLANKS]: 15, [B.PINE_PLANKS]: 15, [B.EMBER_PLANKS]: 15,
-  [B.OAK_LOG]: 15, [B.BIRCH_LOG]: 15, [B.PINE_LOG]: 15, [I.STICK]: 5, [B.BENCH]: 15, [I.WOOD_PICK]: 10, [I.WOOD_AXE]: 10, [I.WOOD_SHOVEL]: 10, [I.WOOD_SWORD]: 10 };
+  [B.OAK_LOG]: 15, [B.BIRCH_LOG]: 15, [B.PINE_LOG]: 15, [I.STICK]: 5, [B.BENCH]: 15, [B.PALM_PLANKS]: 15, [B.SILVER_PLANKS]: 15, [B.PALM_LOG]: 15, [B.SILVER_LOG]: 15, [B.CHARWOOD_LOG]: 40, [B.COAL_BLOCK]: 720, [I.CINDER_SHARD]: 160, [I.WOOD_PICK]: 10, [I.WOOD_AXE]: 10, [I.WOOD_SHOVEL]: 10, [I.WOOD_SWORD]: 10 };
 const SMELT_TIME = 8;
-const GROUP_NAMES = { planks: 'Any Planks', leaves: 'Any Leaves', logs: 'Any Log', coal: 'Coal or Charcoal' };
+const GROUP_NAMES = { planks: 'Any Planks', leaves: 'Any Leaves', logs: 'Any Log', coal: 'Coal or Charcoal', wool: 'Any Wool' };
 const RECIPES = [
   { out: [B.OAK_PLANKS, 4], inp: [[B.OAK_LOG, 1]], cat: 'Basics' },
   { out: [B.BIRCH_PLANKS, 4], inp: [[B.BIRCH_LOG, 1]], cat: 'Basics' },
@@ -347,25 +443,56 @@ const RECIPES = [
   { out: [B.EMBER_PLANKS, 4], inp: [['planks', 4], [I.EMBER_DUST, 1]], bench: true, cat: 'Building' },
   { out: [B.SANDSTONE, 1], inp: [[B.SAND, 4]], cat: 'Building' },
   { out: [B.WOOL, 1], inp: [[I.SILK, 4]], cat: 'Building' },
+  { out: [B.PALM_PLANKS, 4], inp: [[B.PALM_LOG, 1]], cat: 'Basics' },
+  { out: [B.SILVER_PLANKS, 4], inp: [[B.SILVER_LOG, 1]], cat: 'Basics' },
+  { out: [B.EMBER_PLANKS, 4], inp: [[B.CHARWOOD_LOG, 1]], cat: 'Basics' },
+  { out: [B.CLAY_BRICKS, 4], inp: [[B.TERRACOTTA, 4]], bench: true, cat: 'Building' },
+  { out: [B.POLISHED_BASALT, 4], inp: [[B.BASALT, 4]], bench: true, cat: 'Building' },
+  { out: [B.CUT_SANDSTONE, 4], inp: [[B.SANDSTONE, 4]], bench: true, cat: 'Building' },
+  { out: [B.RED_SANDSTONE, 1], inp: [[B.RED_SAND, 4]], cat: 'Building' },
+  { out: [B.TERRACOTTA_ORANGE, 8], inp: [[B.TERRACOTTA, 8], [I.EMBER_DUST, 1]], bench: true, cat: 'Building' },
+  { out: [B.TERRACOTTA_WHITE, 8], inp: [[B.TERRACOTTA, 8], [B.SAND, 1]], bench: true, cat: 'Building' },
+  { out: [B.MUD, 2], inp: [[B.DIRT, 1], [B.CLAY, 1]], cat: 'Building' },
+  { out: [B.MOSS, 1], inp: [['leaves', 4]], cat: 'Building' },
+  { out: [B.HAY, 1], inp: [[B.REED, 4]], cat: 'Building' },
+  { out: [B.LAMP, 1], inp: [[B.GLASS, 4], [I.SUNVEIN_INGOT, 1], [B.TORCH, 1]], bench: true, cat: 'Building' },
+  { out: [B.SHELF, 1], inp: [['planks', 6], [B.REED, 3]], bench: true, cat: 'Building' },
+  ...[[I.SUNVEIN_INGOT, B.SUNVEIN_BLOCK], [I.SKYSHARD, B.SKYSHARD_BLOCK], [I.AZURITE, B.AZURITE_BLOCK], [I.VERDITE, B.VERDITE_BLOCK], [I.COAL, B.COAL_BLOCK], [I.AURORITE, B.AURORITE_BLOCK]].flatMap(([it, bl]) => [
+    { out: [bl, 1], inp: [[it, 9]], bench: true, cat: 'Building' }, { out: [it, 9], inp: [[bl, 1]], cat: 'Building' }]),
+  ...[B.FLOWER_EMBER, I.EMBER_DUST, B.FLOWER_SUN, B.CACTUS, B.FLOWER_FROST, B.FLOWER_VIOLET, B.FLOWER_ROSE, 'coal'].map((dye, k) => ({ out: [woolId(k), 1], inp: [['wool', 1], [dye, 1]], cat: 'Building' })),
+  { out: [B.CINDER_BRICKS, 4], inp: [[B.CINDERSTONE, 4]], bench: true, cat: 'Building' },
+  { out: [B.HALO_BRICKS, 4], inp: [[B.HALOSTONE, 4]], bench: true, cat: 'Building' },
+  { out: [B.NULL_BRICKS, 4], inp: [[B.NULLSTONE, 4]], bench: true, cat: 'Building' },
+  { out: [B.VOID_LAMP, 1], inp: [[B.NULLSTONE, 4], [I.SKYSHARD, 1]], bench: true, cat: 'Building' },
+  { out: [B.GATE_EMBER, 1], inp: [[B.COBBLE, 8], [I.EMBER_DUST, 4], [I.SUNVEIN_INGOT, 2]], bench: true, cat: 'Realms' },
+  { out: [B.GATE_SKY, 1], inp: [['wool', 4], [B.GLASS, 4], [I.SKYSHARD, 2]], bench: true, cat: 'Realms' },
+  { out: [B.GATE_HOLLOW, 1], inp: [[B.VOIDGLASS, 4], [I.CINDER_SHARD, 6], [I.CINDER_HEART, 3]], bench: true, cat: 'Realms' },
+  { out: [I.AURORA_BLADE, 1], inp: [[I.AURORITE, 3], [I.SKYSHARD, 1], [I.STICK, 1]], bench: true, cat: 'Realms' },
 ];
 
 // ---------- creative catalog ----------
 const CREATIVE_TABS = {
   Building: [B.STONE, B.COBBLE, B.MOSSY, B.BRICKS, B.MOSSY_BRICKS, B.BASALT, B.BEDROCK, B.OAK_PLANKS, B.BIRCH_PLANKS, B.PINE_PLANKS, B.EMBER_PLANKS,
-    B.OAK_LOG, B.BIRCH_LOG, B.PINE_LOG, B.GLASS, B.SAND, B.SANDSTONE, B.GRAVEL, B.CLAY, B.WOOL, B.DIRT, B.GRASS, B.SNOW, B.BENCH, B.CHEST, B.DOOR, B.LADDER, B.FURNACE, B.BED, B.TORCH, B.CAMPFIRE, B.WATER],
+    B.OAK_LOG, B.BIRCH_LOG, B.PINE_LOG, B.GLASS, B.SAND, B.SANDSTONE, B.GRAVEL, B.CLAY, B.WOOL, B.DIRT, B.GRASS, B.SNOW, B.BENCH, B.CHEST, B.DOOR, B.LADDER, B.FURNACE, B.BED, B.TORCH, B.CAMPFIRE, B.WATER,
+    B.CLAY_BRICKS, B.SMOOTH_STONE, B.POLISHED_BASALT, B.CUT_SANDSTONE, B.RED_SANDSTONE, B.TERRACOTTA, B.TERRACOTTA_ORANGE, B.TERRACOTTA_WHITE, B.LAMP, B.SHELF, B.HAY,
+    B.SUNVEIN_BLOCK, B.SKYSHARD_BLOCK, B.AZURITE_BLOCK, B.VERDITE_BLOCK, B.COAL_BLOCK, 93, 94, 95, 96, 97, 98, 99, 160, B.PALM_LOG, B.PALM_PLANKS, B.MUSHROOM_CAP, B.MUSHROOM_STEM],
+  Realms: [B.GATE_EMBER, B.GATE_SKY, B.GATE_HOLLOW, B.CINDERSTONE, B.CINDER_BRICKS, B.ASH, B.MAGMA, B.LAVA, B.ORE_CINDER, B.VOIDGLASS, B.GLIMMERSTONE, B.CHARWOOD_LOG, B.CINDER_LEAVES,
+    B.AETHER_GRASS, B.AETHER_SOIL, B.HALOSTONE, B.HALO_BRICKS, B.CLOUD, B.SILVER_LOG, B.SILVER_PLANKS, B.GILDED_LEAVES, B.ORE_AURORITE, B.AURORITE_BLOCK, B.STARBLOOM,
+    B.NULLSTONE, B.NULL_BRICKS, B.VOID_LAMP, I.CINDER_SHARD, I.CINDER_HEART, I.AURORITE, I.AURORA_BLADE, I.EMBER_CROWN],
   Nature: [B.GRASS, B.DIRT, B.SAND, B.OAK_LOG, B.BIRCH_LOG, B.PINE_LOG, B.OAK_LEAVES, B.BIRCH_LEAVES, B.PINE_LEAVES, B.TALLGRASS,
-    B.FLOWER_EMBER, B.FLOWER_SUN, B.FLOWER_FROST, B.BERRY_BUSH, B.MUSHROOM_RED, B.MUSHROOM_BROWN, B.GLOWCAP, B.REED, B.SNOW, B.SNOW_GRASS, B.CACTUS, B.DEAD_BUSH, B.GRAVEL, B.CLAY, B.WATER],
+    B.FLOWER_EMBER, B.FLOWER_SUN, B.FLOWER_FROST, B.BERRY_BUSH, B.MUSHROOM_RED, B.MUSHROOM_BROWN, B.GLOWCAP, B.REED, B.SNOW, B.SNOW_GRASS, B.CACTUS, B.DEAD_BUSH, B.GRAVEL, B.CLAY, B.WATER,
+    B.RED_SAND, B.MUD, B.ICE, B.LOAM, B.MOSS, B.SPORE_SOIL, B.PALM_LEAVES, B.BLOSSOM_LEAVES, B.AUTUMN_LEAVES, B.FERN, B.FLOWER_VIOLET, B.FLOWER_ROSE],
   Ores: [B.ORE_COAL, B.ORE_SUNVEIN, B.ORE_EMBER, B.ORE_AZURITE, B.ORE_SKYSHARD, B.ORE_VERDITE, I.COAL, I.SUNVEIN, I.EMBER_DUST, I.AZURITE, I.SKYSHARD, I.VERDITE],
   Items: [I.WOOD_PICK, I.STONE_PICK, I.SUNVEIN_PICK, I.SKY_PICK, I.WOOD_AXE, I.STONE_AXE, I.SUNVEIN_AXE, I.SKY_AXE, I.WOOD_SHOVEL, I.STONE_SHOVEL, I.SUNVEIN_SHOVEL, I.SKY_SHOVEL,
     I.WOOD_SWORD, I.STONE_SWORD, I.SUNVEIN_SWORD, I.SKY_SWORD, ...Array.from({ length: 12 }, (_, i) => I.ARMOR0 + i), I.STICK, I.CHARCOAL, I.SUNVEIN_INGOT, I.HIDE, I.SILK, I.APPLE, I.BERRIES, I.RAW_HAUNCH, I.ROAST_HAUNCH, B.TORCH, B.CAMPFIRE],
 };
-CREATIVE_TABS.All = [...new Set([].concat(CREATIVE_TABS.Building, CREATIVE_TABS.Nature, CREATIVE_TABS.Ores, CREATIVE_TABS.Items))];
+CREATIVE_TABS.All = [...new Set([].concat(CREATIVE_TABS.Building, CREATIVE_TABS.Nature, CREATIVE_TABS.Ores, CREATIVE_TABS.Items, CREATIVE_TABS.Realms))];
 const CREATIVE_START = [B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.OAK_PLANKS, B.OAK_LOG, B.GLASS, B.CHEST, B.TORCH];
 
 // ---------- settings ----------
 const DEFAULT_SETTINGS = {
   renderDist: 8, fov: 75, sens: 100, invertY: false, master: 70, music: 45, sfx: 80, bobbing: true,
-  showFps: false, difficulty: 2, quality: 3, clouds: true, guiScale: 2, weather: true, particles: 1, ambient: 70, autoRes: true, graphics: 3, v: 2, voice: 0, voiceVol: 80,
+  showFps: false, difficulty: 2, quality: 3, clouds: true, guiScale: 2, weather: true, particles: 1, ambient: 70, autoRes: true, graphics: 3, v: 2, voice: 0, voiceVol: 80, gfxPicked: false,
 };
 const DIFFICULTY = ['Peaceful', 'Easy', 'Normal', 'Hard'];
 const QUALITY = ['50%', '70%', '85%', '100%', 'Sharp (HiDPI)', 'Ultra (supersampled)'];

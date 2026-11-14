@@ -75,9 +75,10 @@ class Chunk {
 }
 
 class World {
-  constructor(seed, gen) {
+  constructor(seed, gen, dim) {
     this.seed = seed | 0;
-    this.gen = gen === 1 ? 1 : 2;
+    this.gen = gen === 1 ? 1 : gen === 2 ? 2 : 3;
+    this.dim = dim | 0;   // 0 Overworld, 1 Emberdeep, 2 Aether, 3 Hollow
     this.chunks = new Map();
     this.edits = new Map();   // ckey -> Map(localIndex -> blockId): every change made after generation
     this.editVer = 0; this.onEdit = null; this.chests = new Map();
@@ -87,7 +88,7 @@ class World {
     this.nC = makeNoise2D(s ^ 0x1234); this.nH = makeNoise2D(s ^ 0x2345); this.nD = makeNoise2D(s ^ 0x3456);
     this.nM = makeNoise2D(s ^ 0x4567); this.nMM = makeNoise2D(s ^ 0x5678); this.nF = makeNoise2D(s ^ 0x6789);
     this.nT = makeNoise2D(s ^ 0x789a); this.nP = makeNoise2D(s ^ 0x89ab); this.nS = makeNoise2D(s ^ 0x9abc);
-    if (this.gen === 2) this.initGen2();
+    if (this.gen >= 2 || this.dim) this.initGen2();
   }
   getChunk(cx, cz) { return this.chunks.get(ckey(cx, cz)); }
   getBlock(x, y, z) {
@@ -130,7 +131,7 @@ class World {
   }
 
   // ---------------- terrain ----------------
-  column(x, z) { return this.gen === 1 ? this.column1(x, z) : this.column2(x, z); }
+  column(x, z) { return this.dim ? this.realmColumn(x, z) : this.gen === 1 ? this.column1(x, z) : this.column2(x, z); }
   column1(x, z) {
     const cont = fbm(this.nC, x / 520, z / 520, 3) + 0.18;
     const hills = fbm(this.nH, x / 130, z / 130, 4);
@@ -160,7 +161,7 @@ class World {
     const hgt = type === 'pine' ? 6 + Math.floor(ihash(tx, tz, s + 4) * 4) : type === 'birch' ? 5 + Math.floor(ihash(tx, tz, s + 4) * 3) : 4 + Math.floor(ihash(tx, tz, s + 4) * 3);
     return { x: tx, z: tz, y: col.h + 1, type, hgt };
   }
-  generate(c) { return this.gen === 1 ? this.generate1(c) : this.generate2(c); }
+  generate(c) { return this.dim ? this.generateRealm(c) : this.gen === 1 ? this.generate1(c) : this.generate2(c); }
   generate1(c) {
     const ox = c.cx * 16, oz = c.cz * 16, d = c.data, s = this.seed;
     const cols = new Array(256);

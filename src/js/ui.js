@@ -2,7 +2,7 @@
    UI: menus, logo, HUD, inventory & crafting, settings
    ===================================================================== */
 const $ = id => document.getElementById(id);
-const SCREENS = ['title', 'new', 'settings', 'credits', 'multi', 'help', 'quit', 'loading', 'pause', 'inv', 'death', 'resume', 'confirm', 'welcome', 'profile', 'worlds', 'servers', 'newserver'];
+const SCREENS = ['title', 'new', 'settings', 'credits', 'multi', 'help', 'quit', 'loading', 'pause', 'inv', 'death', 'resume', 'confirm', 'welcome', 'profile', 'worlds', 'servers', 'newserver', 'gfx', 'realms', 'win'];
 const LOAD_TIPS = [
   'Tip: hold the left mouse button on a tree to collect logs.',
   'Tip: torches keep Gloomlings from appearing nearby.',
@@ -130,15 +130,41 @@ const UI = {
     g.drawImage(face, 0, 0);
   },
 
+  /* ---------- first run: pick a graphics level ---------- */
+  buildGfxPick() {
+    const box = $('gfxPick'); if (box.children.length) return;
+    const blurb = ['For very old or slow devices', 'Fast, with a short view', 'Clouds and swaying plants', 'The standard look', 'Glow, sharper and further', 'Everything on: sun rays and cinematic colour'];
+    GFX_NAMES.forEach((name, i) => {
+      const b = document.createElement('button'); b.className = 'btn gcard' + (i === 3 ? ' primary' : '');
+      b.innerHTML = `<b>${name}</b><small>${blurb[i]}</small><span class="bars">${GFX_NAMES.map((_, k) => `<i class="${k <= i ? 'on' : ''}"></i>`).join('')}</span>`;
+      b.addEventListener('click', () => {
+        GameAudio.init(); GameAudio.click();
+        applyGraphicsPreset(i); Settings.gfxPicked = true; saveSettings(); this.applySettings(); if (this.setEls) this.refreshSettings();
+        this.afterBoot();
+      });
+      box.appendChild(b);
+    });
+  },
+  // what the title flow shows once graphics are chosen: account choice, a pending invite, or the menu
+  afterBoot() {
+    if (!Settings.gfxPicked) { this.buildGfxPick(); this.show('gfx'); return; }
+    if (!Profile.exists) { this.show('welcome'); return; }
+    this.show('title');
+    if (this.pendingInvite) this.runInvite();
+  },
+
   /* ---------- screens ---------- */
   show(name) {
     for (const s of SCREENS) { const el = $('sc-' + s); if (el) el.classList.toggle('show', s === name); }
     this.cur = name;
     const menu = Game.state === 'menu';
-    $('menuShade').classList.toggle('on', menu && ['title', 'new', 'settings', 'credits', 'multi', 'help', 'welcome', 'worlds', 'servers', 'newserver'].includes(name));
+    $('menuShade').classList.toggle('on', menu && ['title', 'new', 'settings', 'credits', 'multi', 'help', 'welcome', 'worlds', 'servers', 'newserver', 'gfx', 'realms'].includes(name));
     $('profileChip').classList.toggle('hidden', !(menu && name === 'title' && Profile.exists));
     if (name === 'profile') this.openProfile();
     if (name === 'worlds') this.refreshWorlds();
+    if (name === 'realms' && !this.realmIcons) { this.realmIcons = true; [['rgE', B.GATE_EMBER], ['rgS', B.GATE_SKY], ['rgH', B.GATE_HOLLOW]].forEach(([id, b]) => { $(id).style.backgroundImage = `url(${this.icons[b]})`; }); }
+    $('touchUI').classList.toggle('hidden', !(Input.touch && Game.state === 'play' && !name));
+    if (Input.touch) $('tcChat').classList.toggle('hidden', !Net.active);
     if (name === 'servers') this.refreshServers();
     if (name === 'newserver') this.openNewServer();
     if (name === 'multi') {
@@ -157,6 +183,7 @@ const UI = {
     if (name === 'title') { this.setHUD(false); if (GameAudio.mode !== 'menu') GameAudio.setMode('menu'); this.refreshContinue(); }
   },
   back() {
+    if (this.cur === 'realms') { this.show('settings'); return; }
     if (Game.state === 'play') { this.show('pause'); return; }
     this.show('title');
   },
@@ -206,6 +233,9 @@ const UI = {
       case 'copyLink': this.copyLink(); break;
       case 'settings': this.show('settings'); break;
       case 'credits': this.show('credits'); break;
+      case 'realms': this.show('realms'); break;
+      case 'winHome': Game.paused = false; Game.ui = null; this.show(null); Game.travel(0); break;
+      case 'winStay': Game.paused = false; Game.ui = null; this.show(null); lockPointer(true); break;
       case 'help': this.show('help'); break;
       case 'back': this.back(); break;
       case 'quit': this.show('quit'); break;
@@ -235,7 +265,7 @@ const UI = {
         $('modeBtn').textContent = 'Game Mode: ' + (Game.creative ? 'Creative' : 'Survival');
         this.toast(Game.creative ? 'Creative mode — double-tap Space to fly' : 'Survival mode');
         break;
-      case 'resetSettings': Object.assign(Settings, DEFAULT_SETTINGS); saveSettings(); this.applySettings(); this.refreshSettings(); break;
+      case 'resetSettings': Object.assign(Settings, DEFAULT_SETTINGS, { gfxPicked: true }); saveSettings(); this.applySettings(); this.refreshSettings(); break;
     }
     $('musicBtn').style.opacity = Settings.music > 0 ? 1 : 0.45;
   },
@@ -354,7 +384,10 @@ const UI = {
   },
   refreshSettings() { for (const k in this.setEls) this.setEls[k](); },
   applySettings() {
-    document.documentElement.style.setProperty('--gs', Settings.guiScale);
+    // on phones the interface is sized to fit the screen whatever the setting says
+    const fit = Input.touch ? Math.min(innerWidth / 250, innerHeight / 215) : 9;
+    this.gs = Math.max(1, Math.min(Settings.guiScale, Math.floor(fit * 4) / 4));
+    document.documentElement.style.setProperty('--gs', this.gs);
     GameAudio.applyVolumes();
     $('fpsBox').classList.toggle('hidden', !Settings.showFps || !!Game.debug);
     resize();
@@ -374,7 +407,7 @@ const UI = {
   iconPos(el, name) {
     if (!name) { el.style.display = 'none'; return; }
     el.style.display = '';
-    const l = TEX[name], gs = Settings.guiScale;
+    const l = TEX[name], gs = this.gs || Settings.guiScale;
     el.style.backgroundPosition = `${-(l % ATLAS.cols) * 16 * gs}px ${-((l / ATLAS.cols) | 0) * 16 * gs}px`;
   },
   slotHTML(st) {
@@ -526,7 +559,7 @@ const UI = {
       sp.appendChild(document.createTextNode(' ' + ITEMS[b].name)); sl.appendChild(sp);
     }
     const ct = $('catTabs'); this.catTab = 'All';
-    for (const t of ['All', 'Building', 'Nature', 'Ores', 'Items']) {
+    for (const t of ['All', 'Building', 'Nature', 'Ores', 'Items', 'Realms']) {
       const b = document.createElement('button'); b.className = 'btn'; b.textContent = t;
       b.onclick = () => { GameAudio.click(); this.catTab = t; this.refreshCatalog(); };
       ct.appendChild(b);
@@ -535,7 +568,7 @@ const UI = {
       if (Game.cursor && !e.target.closest('.tabs')) { Game.cursor = null; this.refreshCursor(); GameAudio.tone({ freq: 300, to: 120, gain: 0.1, decay: 0.1 }); }
     });
     const tabs = $('tabs');
-    for (const t of ['All', 'Basics', 'Tools', 'Armour', 'Building']) {
+    for (const t of ['All', 'Basics', 'Tools', 'Armour', 'Building', 'Realms']) {
       const b = document.createElement('button'); b.className = 'btn'; b.textContent = t;
       b.onclick = () => { GameAudio.click(); this.tab = t; this.refreshRecipes(); };
       tabs.appendChild(b);

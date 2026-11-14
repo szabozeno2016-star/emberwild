@@ -52,6 +52,7 @@ function bindInput() {
   });
   cv.addEventListener('mousedown', e => {
     GameAudio.init();
+    if (Input.touch && performance.now() - (Input.lastTouch || 0) < 900) return; // a finger, already handled
     if (Game.state !== 'play' || Game.paused || Game.ui) return;
     if (!Input.locked && !Input.noLock) { lockPointer(true); return; }
     e.preventDefault();
@@ -77,13 +78,15 @@ function bindInput() {
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'F1', 'F3', 'F5', 'Tab', 'KeyQ', 'Slash'].includes(code)) e.preventDefault();
       if (UI.cur === 'inv') { if (code === 'KeyE' || code === 'Escape') UI.closeInventory(); return; }
       if (UI.cur === 'pause') { if (code === 'Escape') UI.resume(); return; }
-      if (['settings', 'help', 'confirm'].includes(UI.cur)) { if (code === 'Escape') UI.show('pause'); return; }
+      if (UI.cur === 'realms') { if (code === 'Escape') UI.show('settings'); return; }
+      if (['settings', 'help', 'confirm', 'profile'].includes(UI.cur)) { if (code === 'Escape') UI.show('pause'); return; }
       if (Game.paused || Game.ui || !Game.player.alive) return;
       if (e.repeat) { Input.keys[code] = true; return; }
       Input.keys[code] = true;
       if (code.startsWith('Digit')) { const n = +code.slice(5); if (n >= 1 && n <= 9) Game.inv.sel = n - 1; }
       else if (code === 'KeyE') UI.openInventory();
       else if (code === 'KeyT' && Net.active) { e.preventDefault(); UI.openChat(); }
+      else if (code === 'KeyO') { UI.openPause(); UI.act('profile'); }
       else if (code === 'Slash' && Net.active) { e.preventDefault(); UI.openChat('/'); }
       else if (code === 'Tab' && Net.active) UI.showPlayers(true);
       else if (code === 'KeyV' && Net.active) Voice.setPTT(true);
@@ -93,7 +96,7 @@ function bindInput() {
       else if (code === 'F1') Game.hideHud = !Game.hideHud;
       else if (code === 'Space' && Game.creative) {
         const now = performance.now();
-        if (now - (Input.lastSpace || 0) < 300) { Game.player.flying = !Game.player.flying; Game.player.vel[1] = 0; Input.lastSpace = 0; UI.toast(Game.player.flying ? 'Flying — Space up, Shift down' : 'Landed'); }
+        if (now - (Input.lastSpace || 0) < 300) { toggleFly(); Input.lastSpace = 0; }
         else Input.lastSpace = now;
       }
       else if (code === 'KeyW') {
@@ -137,6 +140,103 @@ function pickBlock() {
   for (let i = 9; i < 36; i++) if (inv.s[i] && inv.s[i].id === id) { const tmp = inv.s[inv.sel]; inv.s[inv.sel] = inv.s[i]; inv.s[i] = tmp; inv.touch(); return; }
 }
 
+/* ---------- phones and tablets: touch controls (chosen silently when the device needs them) ---------- */
+function toggleFly() {
+  const P = Game.player; P.flying = !P.flying; P.vel[1] = 0;
+  UI.toast(P.flying ? (Input.touch ? 'Flying — ⇧ up, ⇩ down' : 'Flying — Space up, Shift down') : 'Landed');
+}
+function detectTouch() {
+  const ua = navigator.userAgent || '';
+  const mobileUA = /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle|Opera Mini|IEMobile/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  let coarse = false; try { coarse = matchMedia('(hover: none) and (pointer: coarse)').matches; } catch (e) { }
+  return /[?&#]touch=1/.test(location.search + location.hash) || ((mobileUA || coarse) && (navigator.maxTouchPoints > 0 || 'ontouchstart' in window));
+}
+function initTouch() {
+  if (!detectTouch()) return;
+  Input.touch = true; Input.noLock = true; Input.tx = Input.tz = 0;
+  document.body.classList.add('touch');
+  const cv = R.canvas, stick = $('tcStick'), knob = $('tcKnob');
+  // --- walking: a thumb stick ---
+  let sid = null;
+  const stickMove = e => {
+    const r = stick.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, max = r.width / 2 - 8;
+    let dx = e.clientX - cx, dy = e.clientY - cy; const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px,${dy}px)`;
+    const nx = dx / max, nz = -dy / max, dead = 0.16;
+    Input.tx = Math.abs(nx) < dead ? 0 : nx; Input.tz = Math.abs(nz) < dead ? 0 : nz;
+    Input.tsprint = len >= max * 0.98 && nz > 0.8;
+  };
+  const stickEnd = () => { sid = null; Input.tx = Input.tz = 0; Input.tsprint = false; knob.style.transform = ''; };
+  stick.addEventListener('pointerdown', e => { e.preventDefault(); GameAudio.init(); sid = e.pointerId; try { stick.setPointerCapture(sid); } catch (x) { } stickMove(e); });
+  stick.addEventListener('pointermove', e => { if (e.pointerId === sid) stickMove(e); });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(n => stick.addEventListener(n, e => { if (e.pointerId === sid) stickEnd(); }));
+  // --- buttons ---
+  const hold = (el, down, up) => {
+    el.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); GameAudio.init(); try { el.setPointerCapture(e.pointerId); } catch (x) { } down(); });
+    ['pointerup', 'pointercancel'].forEach(n => el.addEventListener(n, e => { e.preventDefault(); if (up) up(); }));
+    el.addEventListener('contextmenu', e => e.preventDefault());
+  };
+  hold($('tcJump'), () => {
+    Input.keys.Space = true;
+    if (Game.creative && Game.player && inGameActive()) { const now = performance.now(); if (now - (Input.lastSpace || 0) < 320) { toggleFly(); Input.lastSpace = 0; } else Input.lastSpace = now; }
+  }, () => { Input.keys.Space = false; });
+  hold($('tcSneak'), () => {
+    const P = Game.player; if (P && P.flying) { Input.keys.ShiftLeft = true; return; }
+    Input.sneakLock = !Input.sneakLock; Input.keys.ShiftLeft = Input.sneakLock; $('tcSneak').classList.toggle('on', Input.sneakLock);
+  }, () => { if (!Input.sneakLock) Input.keys.ShiftLeft = false; });
+  hold($('tcPause'), () => { Input.sneakLock = false; $('tcSneak').classList.remove('on'); UI.openPause(); });
+  hold($('tcInv'), () => { if (inGameActive()) UI.openInventory(); });
+  hold($('tcView'), () => { Game.view = ((Game.view || 0) + 1) % 3; });
+  hold($('tcChat'), () => { if (Net.active && inGameActive()) UI.openChat(); });
+  // hotbar: tap a slot to hold it, tap it again to open the inventory
+  UI.hotEls.forEach((el, i) => el.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation(); if (!inGameActive()) return;
+    if (Game.inv.sel === i && performance.now() - (Input.lastHot || 0) < 400) UI.openInventory();
+    Game.inv.sel = i; Input.lastHot = performance.now();
+  }));
+  // --- the world: drag to look, tap to place or use (or hit a creature), hold to break ---
+  let lid = null, lx = 0, ly = 0, sx0 = 0, sy0 = 0, t0 = 0, moved = 0, holding = false, holdTimer = 0;
+  const aimAt = e => { Input.aim = [(e.clientX / innerWidth) * 2 - 1, 1 - (e.clientY / innerHeight) * 2]; };
+  const endHold = () => { clearTimeout(holdTimer); if (holding) { holding = false; Input.mouseL = Input.mouseR = false; } };
+  cv.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse') return;
+    e.preventDefault(); GameAudio.init(); Input.lastTouch = performance.now();
+    if (!inGameActive() || lid !== null) return;
+    lid = e.pointerId; lx = sx0 = e.clientX; ly = sy0 = e.clientY; t0 = performance.now(); moved = 0; holding = false;
+    try { cv.setPointerCapture(lid); } catch (x) { }
+    aimAt(e);
+    holdTimer = setTimeout(() => {
+      if (lid === null || moved > 14 || !inGameActive()) return;
+      holding = true;
+      const st = Game.inv.held, food = st && ITEMS[st.id].food && !Game.creative && !Game.mobTarget;
+      if (food) { Input.mouseR = true; Input.pressR = true; } else { Input.mouseL = true; Input.pressL = true; }
+    }, 260);
+  });
+  cv.addEventListener('pointermove', e => {
+    if (e.pointerId !== lid) return;
+    const dx = e.clientX - lx, dy = e.clientY - ly; lx = e.clientX; ly = e.clientY;
+    moved = Math.max(moved, Math.hypot(e.clientX - sx0, e.clientY - sy0));
+    Input.lastTouch = performance.now();
+    if (moved > 8 && inGameActive()) {
+      const P = Game.player, s = 0.0055 * Settings.sens / 100;
+      P.yaw += dx * s; P.pitch = clamp(P.pitch - dy * s * (Settings.invertY ? -1 : 1), -1.55, 1.55);
+    }
+    if (holding) aimAt(e); else if (moved > 14) Input.aim = null;
+  });
+  cv.addEventListener('pointerup', e => {
+    if (e.pointerId !== lid) return;
+    lid = null; Input.lastTouch = performance.now();
+    const wasHold = holding; endHold();
+    if (!wasHold && moved <= 14 && performance.now() - t0 < 320 && inGameActive()) { aimAt(e); Input.tap = 1; }
+    else Input.aim = null;
+  });
+  cv.addEventListener('pointercancel', e => { if (e.pointerId === lid) { lid = null; endHold(); Input.aim = null; } });
+  cv.addEventListener('touchstart', e => { if (Game.state === 'play') e.preventDefault(); }, { passive: false });
+  window.addEventListener('orientationchange', () => setTimeout(() => UI.applySettings(), 250));
+  window.addEventListener('resize', () => UI.applySettings());
+}
+
 let lastT = performance.now(), errCount = 0;
 function loop(now) {
   const dt = Math.min(0.05, Math.max(0, (now - lastT) / 1000)); lastT = now;
@@ -156,6 +256,7 @@ function showError(msg) {
     catch (e) { showError(e.message); return; }
     UI.init(img);
     bindInput();
+    initTouch();
     resize();
     Game.startMenu();
     UI.show('title');
@@ -176,10 +277,8 @@ function showError(msg) {
     Cloud.init().then(() => Profile.load()).then(() => {
       if (!Cloud.canAccount) $('wCreateSub').textContent = 'Pick a name and skin for multiplayer. Your account and worlds are kept in this browser.';
       UI.refreshChip(); UI.refreshContinue();
-      if (!Profile.exists && UI.cur === 'title') UI.show('welcome');
-      else if (UI.cur === 'title') UI.show('title');
-      if (UI.pendingInvite && Profile.exists) UI.runInvite();
-      else if (UI.pendingInvite) $('wCreateSub').textContent = 'Pick a name and skin — then you’ll join your friend straight away.';
+      if (UI.pendingInvite && !Profile.exists) $('wCreateSub').textContent = 'Pick a name and skin — then you’ll join your friend straight away.';
+      if (UI.cur === 'title') UI.afterBoot();
     });
     requestAnimationFrame(t => { lastT = t; loop(t); });
   };

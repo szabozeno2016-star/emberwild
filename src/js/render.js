@@ -25,7 +25,7 @@ const FS_MAIN = `#version 300 es
 precision highp float; precision highp sampler2DArray;
 in vec3 vUVL; in float vShade; in float vSky; in float vBlk; in float vDist; in vec3 vPos; flat in int vFlags;
 uniform vec3 uCamF;
-uniform sampler2DArray uTex; uniform sampler2DArray uTexA; uniform float uAniso;
+uniform sampler2DArray uTex; uniform sampler2DArray uTexA; uniform float uAniso; uniform vec3 uAmb;
 uniform float uDay; uniform vec3 uSunCol; uniform vec3 uFog; uniform vec2 uFogR; uniform float uAlpha;
 uniform float uWater; uniform float uTime; uniform vec4 uTint; uniform float uCutoff; uniform float uFlick; uniform float uFastLeaves; uniform float uFancyWater; uniform vec3 uBiome[32];
 out vec4 o;
@@ -55,7 +55,7 @@ void main(){
   float blk = pow(clamp(vBlk, 0.0, 1.0), 1.7) * 1.3 * uFlick;
   vec3 L = max(sky * uDay * uSunCol, blk * vec3(1.0, 0.76, 0.48));
   L = min(L, vec3(1.25));
-  L = max(L, vec3(0.035, 0.035, 0.05));
+  L = max(L, uAmb);
   vec3 c = t.rgb * vShade * L;
   if ((vFlags & 4) != 0) c = t.rgb * (1.08 + 0.1 * sin(uTime * 11.0 + vPos.x * 5.0 + vPos.z * 3.0));
   float a = t.a * uAlpha;
@@ -165,7 +165,7 @@ function initRenderer(canvas, atlasImg) {
   R.progMain = compile(gl, VS_MAIN, FS_MAIN);
   R.progSky = compile(gl, VS_SKY, FS_SKY);
   R.progLine = compile(gl, VS_LINE, FS_LINE);
-  R.uMain = uniforms(gl, R.progMain, ['uBiome', 'uTexA', 'uAniso', 'uWave', 'uFastLeaves', 'uFancyWater', 'uFlick', 'uVP', 'uCam', 'uCamF', 'uTime', 'uTex', 'uDay', 'uSunCol', 'uFog', 'uFogR', 'uAlpha', 'uWater', 'uTint', 'uCutoff']);
+  R.uMain = uniforms(gl, R.progMain, ['uAmb', 'uBiome', 'uTexA', 'uAniso', 'uWave', 'uFastLeaves', 'uFancyWater', 'uFlick', 'uVP', 'uCam', 'uCamF', 'uTime', 'uTex', 'uDay', 'uSunCol', 'uFog', 'uFogR', 'uAlpha', 'uWater', 'uTint', 'uCutoff']);
   R.uSky = uniforms(gl, R.progSky, ['uInv', 'uSun', 'uZen', 'uHor', 'uGlow', 'uNight', 'uTime', 'uSunset', 'uRain']);
   R.uLine = uniforms(gl, R.progLine, ['uVP', 'uCol']);
 
@@ -173,6 +173,7 @@ function initRenderer(canvas, atlasImg) {
   const cv = document.createElement('canvas'); cv.width = atlasImg.width; cv.height = atlasImg.height;
   const cx = cv.getContext('2d'); cx.drawImage(atlasImg, 0, 0);
   const img = cx.getImageData(0, 0, cv.width, cv.height).data;
+  fitSkinSlots(gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS));
   const data = new Uint8Array(16 * 16 * 4 * TEX_TOTAL);
   for (let l = 0; l < TEX_WHITE; l++) {
     const tx = (l % ATLAS.cols) * 16, ty = ((l / ATLAS.cols) | 0) * 16;
@@ -192,10 +193,14 @@ function initRenderer(canvas, atlasImg) {
   R.tileData = data;
   R.tex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D_ARRAY, R.tex);
-  gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.RGBA8, 16, 16, TEX_TOTAL, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+  // every 16px tile is redrawn at 32px with smoothed edges and fine detail
+  const hd = new Uint8Array(TILE * TILE * 4 * TEX_TOTAL);
+  for (let l = 0; l < TEX_WHITE; l++) hdTile(data, l * 1024, hd, l * TILE * TILE * 4, l);
+  hd.fill(255, TEX_WHITE * TILE * TILE * 4);
+  gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.RGBA8, TILE, TILE, TEX_TOTAL, 0, gl.RGBA, gl.UNSIGNED_BYTE, hd);
   gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_LEVEL, 4);
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_LEVEL, 5);
   gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.REPEAT);
   gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.REPEAT);
   gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
@@ -463,6 +468,30 @@ function flushDyn() {
 
 // ---- item mesh templates (blocks as cubes, sprites extruded) ----
 const ItemMesh = new Map();
+// 16px tile -> 32px: Scale2x keeps hand-drawn shapes crisp but rounds their stair-steps, then every texel is
+// shaded a little towards its neighbours and given fine grain so surfaces read as material instead of flat squares
+const TILE = 32;
+function hdTile(src, so, dst, doff, salt) {
+  const px = (x, y) => so + (((y + 16) & 15) * 16 + ((x + 16) & 15)) * 4;
+  const same = (a, b) => src[a] === src[b] && src[a + 1] === src[b + 1] && src[a + 2] === src[b + 2] && src[a + 3] === src[b + 3];
+  let cut = false; for (let i = 3; i < 1024; i += 4) if (src[so + i] < 255) { cut = true; break; }
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+    const P = px(x, y), A = px(x, y - 1), Bq = px(x + 1, y), C = px(x - 1, y), D = px(x, y + 1);
+    const pick = [
+      same(C, A) && !same(C, D) && !same(A, Bq) ? A : P, same(A, Bq) && !same(A, C) && !same(Bq, D) ? Bq : P,
+      same(D, C) && !same(D, Bq) && !same(C, A) ? C : P, same(Bq, D) && !same(Bq, A) && !same(D, C) ? D : P];
+    for (let k = 0; k < 4; k++) {
+      const sx = k & 1, sy = k >> 1, s = pick[k], d = doff + ((y * 2 + sy) * TILE + x * 2 + sx) * 4;
+      let r = src[s], g = src[s + 1], b = src[s + 2]; const a = src[s + 3];
+      if (a === 255 && s === P) {
+        const H = sx ? Bq : C, V = sy ? D : A, wh = src[H + 3] === 255 ? 0.17 : 0, wv = src[V + 3] === 255 ? 0.17 : 0;
+        r = r * (1 - wh - wv) + src[H] * wh + src[V] * wv; g = g * (1 - wh - wv) + src[H + 1] * wh + src[V + 1] * wv; b = b * (1 - wh - wv) + src[H + 2] * wh + src[V + 2] * wv;
+        if (!cut) { const n = 1 + (ihash(x * 2 + sx, y * 2 + sy, salt * 131 + 5) - 0.5) * 0.07 + (sx + sy === 0 ? 0.012 : sx + sy === 2 ? -0.012 : 0); r *= n; g *= n; b *= n; }
+      }
+      dst[d] = r > 255 ? 255 : r; dst[d + 1] = g > 255 ? 255 : g; dst[d + 2] = b > 255 ? 255 : b; dst[d + 3] = a;
+    }
+  }
+}
 function tileAlpha(layer, x, y) { return R.tileData[(layer * 256 + y * 16 + x) * 4 + 3]; }
 function itemTemplate(id) {
   if (ItemMesh.has(id)) return ItemMesh.get(id);

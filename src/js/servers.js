@@ -58,7 +58,7 @@ const Servers = {
           if (off) { off.online = online; continue; }
           if (!SERVER_MODES[v.mode] || !/^[a-z0-9]{4,24}$/.test(id)) continue;
           rows.push({ id, name: this.clean(v.name).slice(0, 24) || 'Server', desc: this.clean(v.desc).slice(0, 90), mode: v.mode,
-            seed: String(v.seed || id).slice(0, 40), gen: v.gen === 2 ? 2 : 1, owner: v.owner || null, ownerName: cleanName(v.ownerName) || '', created: v.created || 0, updated: v.updated || 0, online });
+            seed: String(v.seed || id).slice(0, 40), gen: v.gen === 3 ? 3 : v.gen === 2 ? 2 : 1, owner: v.owner || null, ownerName: cleanName(v.ownerName) || '', created: v.created || 0, updated: v.updated || 0, online });
         }
       } catch (e) { this.fetchError = true; }
     }
@@ -76,7 +76,7 @@ const Servers = {
     if (this.mine().length >= 3) throw new Error('You can have up to 3 servers. Delete one first.');
     const id = newId().replace(/[^a-z0-9]/g, '').slice(0, 16);
     const seed = this.clean(o.seed).slice(0, 40) || String((Math.random() * 1e9) | 0);
-    const doc = { v: 1, gen: 2, id, name, desc, mode: SERVER_MODES[o.mode] ? o.mode : 'survival', seed, owner: Cloud.uid, ownerName: Profile.data ? Profile.data.name : '',
+    const doc = { v: 1, gen: 3, id, name, desc, mode: SERVER_MODES[o.mode] ? o.mode : 'survival', seed, owner: Cloud.uid, ownerName: Profile.data ? Profile.data.name : '',
       created: Date.now(), updated: Date.now(), online: 0, seen: 0 };
     try { await this.ref(id).set(doc); this.noteWrite(true); }
     catch (e) { this.noteWrite(false); throw new Error('You don’t have permission to create servers here. Ask the game’s owner to share it with you as a Contributor.'); }
@@ -118,8 +118,8 @@ const Servers = {
     this.saveLocal(id, edits, time);
     await Shared.putText(Servers.statePath(id), edits, { time, weather });
   },
-  statePath(x) { const srv = typeof x === 'string' ? (this.official(x) || this.list.find(s => s.id === x) || { id: x }) : x; return 'servers/' + srv.id + (srv.gen === 2 ? '/state2' : '/state'); },
-  worldKey(id) { const srv = this.official(id) || this.list.find(s => s.id === id) || {}; return 'emberwild.srvw.' + id + (srv.gen === 2 ? '.2' : ''); },
+  statePath(x) { const srv = typeof x === 'string' ? (this.official(x) || this.list.find(s => s.id === x) || { id: x }) : x; return 'servers/' + srv.id + (srv.gen >= 2 ? '/state' + srv.gen : '/state'); },
+  worldKey(id) { const srv = this.official(id) || this.list.find(s => s.id === id) || {}; return 'emberwild.srvw.' + id + (srv.gen >= 2 ? '.' + srv.gen : ''); },
   saveLocal(id, edits, time) { LS.set(this.worldKey(id), { edits, time, ts: Date.now() }); },
   async heartbeat(srv, online) {
     const ref = this.ref(srv.id);
