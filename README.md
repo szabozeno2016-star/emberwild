@@ -69,7 +69,7 @@ Endless procedurally generated worlds, survival and creative modes, crafting, sm
 | Left click (hold) | Mine / attack |
 | Right click | Place / use / eat · open chests and doors · travel through gates |
 | Space | Jump (double-tap to fly in Creative) |
-| Shift / Ctrl | Sneak / sprint |
+| Shift or C / Ctrl | Sneak / sprint |
 | E | Inventory & crafting |
 | 1–9, mouse wheel | Choose hotbar slot |
 | Q | Drop item |
