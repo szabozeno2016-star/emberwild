@@ -9,7 +9,7 @@ const LOAD_TIPS = [
   'Tip: stand near a Workbench to unlock tool recipes.',
   'Tip: Gloomlings burn away when the sun comes up.',
   'Tip: oak and birch leaves sometimes drop apples.',
-  'Tip: sneak with Shift to stop at ledges.',
+  'Tip: sneak with Shift or C to stop at ledges.',
   'Tip: rare crystals glitter deep underground. Bring a stone pickaxe.',
 ];
 const GLYPHS = {

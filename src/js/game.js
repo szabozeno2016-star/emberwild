@@ -749,7 +749,7 @@ const Game = {
     let fx = 0, fz = 0;
     if (!uiBlock) { if (K.KeyW) fz += 1; if (K.KeyS) fz -= 1; if (K.KeyA) fx -= 1; if (K.KeyD) fx += 1; if (Input.touch) { fx += Input.tx; fz += Input.tz; } }
     const len = Math.hypot(fx, fz); if (len > 1) { fx /= len; fz /= len; }
-    const shiftDown = !uiBlock && !!(K.ShiftLeft || K.ShiftRight);
+    const shiftDown = !uiBlock && !!(K.ShiftLeft || K.ShiftRight || K.KeyC);
     if (!this.creative) P.flying = false;
     P.sneak = shiftDown && !P.flying;
     if (!uiBlock && (K.ControlLeft || K.ControlRight || Input.tsprint) && fz > 0 && P.hunger > 6) P.sprint = true;

@@ -143,7 +143,7 @@ function pickBlock() {
 /* ---------- phones and tablets: touch controls (chosen silently when the device needs them) ---------- */
 function toggleFly() {
   const P = Game.player; P.flying = !P.flying; P.vel[1] = 0;
-  UI.toast(P.flying ? (Input.touch ? 'Flying — ⇧ up, ⇩ down' : 'Flying — Space up, Shift down') : 'Landed');
+  UI.toast(P.flying ? (Input.touch ? 'Flying — ⇧ up, ⇩ down' : 'Flying — Space up, Shift or C down') : 'Landed');
 }
 function detectTouch() {
   const ua = navigator.userAgent || '';
